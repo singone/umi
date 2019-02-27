@@ -1,25 +1,26 @@
 import { join } from 'path';
-import pullAll from 'lodash.pullall';
-import uniq from 'lodash.uniq';
+import rimraf from 'rimraf';
 import { existsSync, readFileSync, writeFileSync } from 'fs';
 
 export default function(opts = {}) {
   const { dllDir, api, include, exclude } = opts;
 
-  const { paths, _resolveDeps } = api;
+  const {
+    paths,
+    _resolveDeps,
+    _: { pullAll, uniq },
+  } = api;
   const pkgFile = join(paths.cwd, 'package.json');
   const pkg = existsSync(pkgFile) ? require(pkgFile) : {}; // eslint-disable-line
   const depNames = pullAll(
     uniq(Object.keys(pkg.dependencies || {}).concat(include || [])),
     exclude,
-  );
+  ).filter(dep => {
+    return dep !== 'umi' && !dep.startsWith('umi-plugin-');
+  });
   const webpack = require(_resolveDeps('af-webpack/webpack'));
-  const { webpackHotDevClientPath } = require(_resolveDeps(
-    'af-webpack/react-dev-utils',
-  ));
   const files = uniq([
     ...depNames,
-    webpackHotDevClientPath,
     'umi/link',
     'umi/dynamic',
     'umi/navlink',
@@ -67,6 +68,7 @@ export default function(opts = {}) {
       path: dllDir,
       filename: '[name].dll.js',
       library: '[name]',
+      publicPath: api.webpackConfig.output.publicPath,
     },
     plugins: [
       ...afWebpackConfig.plugins,
@@ -97,6 +99,7 @@ export default function(opts = {}) {
         resolve();
       },
       onFail({ err }) {
+        rimraf.sync(dllDir);
         reject(err);
       },
     });

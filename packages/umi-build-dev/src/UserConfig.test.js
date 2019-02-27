@@ -17,6 +17,12 @@ describe('static UserConfig', () => {
     });
     expect(config).toEqual({
       alias: { a: 'b' },
+      deep: {
+        a: {
+          b: '111',
+          c: '222',
+        },
+      },
     });
   });
 
@@ -30,6 +36,12 @@ describe('static UserConfig', () => {
     expect(config).toEqual({
       alias: { a: 'b' },
       custom: 1,
+      deep: {
+        a: {
+          b: '333',
+          c: '222',
+        },
+      },
     });
   });
 
@@ -43,6 +55,12 @@ describe('static UserConfig', () => {
     expect(config).toEqual({
       alias: { a: 'b' },
       local: 1,
+      deep: {
+        a: {
+          b: '111',
+          c: '222',
+        },
+      },
     });
   });
 
@@ -59,6 +77,12 @@ describe('static UserConfig', () => {
       alias: { a: 'b' },
       local: 1,
       custom: 1,
+      deep: {
+        a: {
+          b: '333',
+          c: '222',
+        },
+      },
     });
   });
 
@@ -108,9 +132,11 @@ describe('static UserConfig', () => {
 });
 
 describe('instance UserConfig', () => {
+  const cwd = join(base, 'umirc');
   const service = {
+    cwd,
     paths: {
-      cwd: join(base, 'umirc'),
+      cwd,
     },
     applyPlugins(name, { initialValue }) {
       if (name === 'modifyDefaultConfig') {

@@ -23,6 +23,11 @@ export default function(api) {
         if (item.name === 'PROXY_START') startIndex = index;
         if (item.name === 'PROXY_END') endIndex = index;
       });
+      debug(
+        `routes before changed: ${app._router.stack
+          .map(item => item.name || 'undefined name')
+          .join(', ')}`,
+      );
       if (startIndex !== null && endIndex !== null) {
         app._router.stack.splice(startIndex, endIndex - startIndex + 1);
       }
@@ -34,7 +39,6 @@ export default function(api) {
     }
 
     function reloadProxy(proxy) {
-      deleteRoutes();
       loadProxy(proxy, /* isWatch */ true);
     }
 
@@ -50,24 +54,29 @@ export default function(api) {
        * }
        */
       if (!Array.isArray(proxy)) {
-        proxy = Object.keys(proxy).map(context => {
-          let proxyOptions;
-          // For backwards compatibility reasons.
-          const correctedContext = context
-            .replace(/^\*$/, '**')
-            .replace(/\/\*$/, '');
-          if (typeof proxy[context] === 'string') {
-            proxyOptions = {
-              context: correctedContext,
-              target: proxy[context],
-            };
-          } else {
-            proxyOptions = Object.assign({}, proxy[context]);
-            proxyOptions.context = correctedContext;
-          }
-          proxyOptions.logLevel = proxyOptions.logLevel || 'warn';
-          return proxyOptions;
-        });
+        proxy = Object.keys(proxy)
+          .sort((a, b) => {
+            // /testa need set before /test
+            return a > b ? -1 : 1;
+          })
+          .map(context => {
+            let proxyOptions;
+            // For backwards compatibility reasons.
+            const correctedContext = context
+              .replace(/^\*$/, '**')
+              .replace(/\/\*$/, '');
+            if (typeof proxy[context] === 'string') {
+              proxyOptions = {
+                context: correctedContext,
+                target: proxy[context],
+              };
+            } else {
+              proxyOptions = Object.assign({}, proxy[context]);
+              proxyOptions.context = correctedContext;
+            }
+            proxyOptions.logLevel = proxyOptions.logLevel || 'warn';
+            return proxyOptions;
+          });
       }
 
       const getProxyMiddleware = proxyConfig => {
@@ -93,6 +102,8 @@ export default function(api) {
           app._router.stack.splice(startIndex, endIndex - startIndex + 1);
         }
         routesLength = app._router.stack.length;
+
+        deleteRoutes();
       }
 
       app.use(PROXY_START);

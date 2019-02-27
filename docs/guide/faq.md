@@ -1,72 +1,132 @@
+---
+sidebarDepth: 3
+---
+
 # FAQ
-
-::: tip
-持续补充中。
-:::
-
-[[toc]]
 
 ## General
 
-### 是否可用于生产环境？
+### Can it be used in a production environment?
 
-当然！umi 是公司内（蚂蚁金服）的前端基础框架，已有大量基于 umi 开发的无线和 PC 项目上线。
+Umi is the underlying front-end framework of Ant Financial, which has directly or indirectly served 600+ applications, including java, node, H5 wireless, Hybrid applications, pure front-end assets applications, CMS applications, and more.
 
-### 如何引入 polyfill ？
-
-先安装依赖，
+### How do I view the version numbers such as react, react-dom, and react-router?
 
 ```bash
-$ npm install @babel/polyfill --save
+$ umi -v --verbose
+
+umi@2.0.0
+darwin x64
+node@v10.6.0
+umi-build-dev@1.0.0
+af-webpack@1.0.0
+babel-preset-umi@1.0.0
+umi-test@1.0.0
+react@16.4.2 (/Users/chencheng/code/github.com/ant-design/ant-design-pro/node_modules/react)
+react-dom@16.4.2 (/Users/chencheng/code/github.com/ant-design/ant-design-pro/node_modules/react-dom)
+react-router@4.3.1 (/Users/chencheng/code/github.com/umijs/umi/packages/umi-build-dev/node_modules/react-router)
+react-router-dom@4.3.1 (/Users/chencheng/code/github.com/ant-design/ant-design-pro/node_modules/react-router-dom)
+dva@2.4.0 (/Users/chencheng/code/github.com/ant-design/ant-design-pro/node_modules/dva)
+dva-loading@2.0.5
+dva-immer@0.2.3
+path-to-regexp@1.7.0
 ```
 
-新建 `src/global.js`，内容如下：
+### How to introduce @babel/polyfill?
+
+Install dependencies first,
+
+```bash
+$ yarn add @babel/polyfill
+```
+
+Then create a new `src/global.js` with the following contents:
 
 ```js
 import '@babel/polyfill';
 ```
 
-### 如何动态修改 title ？
+### How to dynamically modify the title?
 
-可以通过 [react-helmet](https://github.com/nfl/react-helmet) 动态修改 title 。
-> 注意：在混合应用中，ios端web容器内，使用react-helmet失效的话，可以尝试使用[react-document-title](https://github.com/gaearon/react-document-title)。
+The title can be dynamically modified via [react-helmet](https://github.com/nfl/react-helmet).
+> Note: In a hybrid application, if you use react-helmet in the ios web container, you can try [react-document-title](https://github.com/gaearon/react-document-title).
 
-### 如何让编辑器的 eslint 校验生效？
+## Reporting Error
 
-编辑器需要读取 .eslint 和依赖的 eslint bin，所以需要安装相关依赖到项目。
+### `Object.values` is not a function
 
-先安装依赖，
+E.g.
 
-```bash
-$ npm i eslint@4 eslint-config-umi eslint-plugin-flowtype@2 eslint-plugin-import@2 eslint-plugin-jsx-a11y@5 eslint-plugin-react@7 --save-dev
-```
+<img src="https://gw.alipayobjects.com/zos/rmsportal/mTaaEfxKkkGAQicDOSeb.png" />
 
-然后新增 `.eslintrc`，内容如下：
+Upgrade the node version and make sure the version is 8.10 or greater.
 
-```json
-{
-  "extends": "eslint-config-umi"
+### `exports is not defined`
+
+E.g.
+
+<img src="https://gw.alipayobjects.com/zos/rmsportal/fLNyyPNyquAGoYQxxIDI.png" />
+
+Check the babel configuration to remove unnecessary presets and plugins.
+
+### `Plugin umi-plugin-react:pwa initialize failed`
+
+E.g.
+
+<img src="https://gw.alipayobjects.com/zos/rmsportal/lSuOXlbtrZPLoMaLBODj.png" />
+
+Make sure you have package.json and have configured the `name` attribute.
+
+### `Conflicting order between [mini-css-extract-plugin]`
+
+E.g.
+
+<img src="https://gw.alipayobjects.com/zos/rmsportal/mjzdexbrmZulkjCAqzPC.png" />
+
+This is [a problem with the webpack plugin](https://github.com/webpack-contrib/mini-css-extract-plugin/issues/250), which does not affect the normal production of CSS files and can be ignored for now.
+
+### `umi` is not an internal or external command
+
+E.g.
+
+<img src="https://gw.alipayobjects.com/zos/rmsportal/fatmbcGwSOwDntHjmrtG.png" />
+
+You need to configure the NODE_PATH environment variable. If you use yarn, you can get the bin path by executing `yarn global bin`.
+
+## webpack
+
+### How to configure additional loader?
+
+For example, I hope .svg not to produce base64, but to generate svg files, which can be configured like this:
+
+```js
+export default {
+  // Add exclude for url-loader
+  urlLoaderExcludes: [/.svg$/],
+  // Add loader
+  chainWebpack(config) {
+    config.module.rule('svg-with-file')
+      .test(/.svg$/)
+      .use('svg-with-file-loader')
+      .loader('file-loader')
+  },
 }
 ```
 
-### 如何禁用 dev 和 build 时的 eslint 校验？
-
-```bash
-$ ESLINT=none umi dev
-$ ESLINT=none umi build
-```
-
-## 报错
-
-### this.setDynamic is not a function
-
-不要自己配置 `babel-plugin-transform-runtime`，因为 umi 已内置处理，transform-runtime 处理两边会出现上述问题。
-
 ## CSS
 
-### 如何禁用 css modules ？
+### Why don't my imported CSS files take effect?
 
-修改 `.webpackrc`:
+umi use css modules by default, please write your css as css modules.
+
+Ref:
+
+* [css-modules/css-modules](https://github.com/css-modules/css-modules)
+* [CSS Modules usage tutorial](http://www.ruanyifeng.com/blog/2016/06/css_modules.html)
+
+### How to disable CSS modules?
+
+Modify `.umirc.js`:
 
 ```json
 {
@@ -74,15 +134,17 @@ $ ESLINT=none umi build
 }
 ```
 
-### 如何使用 sass ？
+However, it is not recommended to turn off css modules for no particular reason.
 
-先安装额外的依赖，
+### How to use sass?
+
+Install additional dependencies first,
 
 ```bash
 $ npm i node-sass sass-loader --save
 ```
 
-然后修改 `.webpackrc`:
+Then modify `.umirc.js`:
 
 ```json
 {
@@ -92,47 +154,49 @@ $ npm i node-sass sass-loader --save
 
 ## Test
 
-### 如何断点调试
+### How to do breakpoint debugging?
 
-确保 node 在 8 以上，然后执行：
+Make sure node version is above 8.10 and then execute:
 
 ```bash
 $ node --inspect-brk ./node_modules/.bin/umi test
 ```
 
-然后在浏览器里打开 chrome://inspect/#devices 进行 inspect 和断点。
+Then open chrome://inspect/#devices in the browser for inspect and breakpoints.
 
-## 部署
+## Deployment
 
-### build 后访问路由刷新后 404？
+### After the build access route is refreshed 404?
 
-几个方案供选择：
+Several options are available:
 
-* 改用 hashHistory，在 `.umirc.js` 里配 `hashHistory: true`
-* 静态化，在 `.umirc.js` 里配 `exportStatic: true`
-* 服务端配置路由 fallback 到 index.html
+* Use `hashHistory` instead of `history: 'hash' in `.umirc.js`
+* Static, with `exportStatic: true` in `.umirc.js`
+* The server configures the route fallback to index.html
 
-### build之后图片丢失？
+### After the build, the picture is lost?
 
-可能是图片没有正确引用，可以参考一下代码，正确引入图片。
+It may be that the picture is not correctly quoted. You can refer to the code and import the picture correctly.
 
 ```js
 import React from 'react';
-import logo from './logo.png'; // 告诉WebPACK这个JS文件使用这个图像
+import logo from './logo.png'; // Tell Webpack this JS file to use this image
 
 console.log(logo); // logo.84287d09.png
 
-function Header() {
-  // 导入图片
+function header() {
+  // import image
   return <img src={logo} alt="Logo" />;
 }
 
 export default Header;
+
 ```
-在css中使用，注意不要使用绝对路径
+Use in css, be careful not to use absolute paths
 ```css
 .Logo {
   background-image: url(./logo.png);
 }
 ```
-> 注意：图片大小小于10k，走basement。即不会被拷贝到public文件夹下，而是以base64的资源存在。
+
+> Note: base64 will be taken when the image size is less than 10 k. That is, it will not be copied to the public folder, but will be stored as a base64 resource.

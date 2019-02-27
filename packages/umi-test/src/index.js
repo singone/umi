@@ -1,23 +1,13 @@
-import jestCli from 'jest-cli';
+import jest from 'jest';
 import { join } from 'path';
-import { existsSync, statSync } from 'fs';
+import { existsSync } from 'fs';
 
 const debug = require('debug')('umi-test');
 
 process.env.NODE_ENV = 'test';
 
-function test(path) {
-  return existsSync(path) && statSync(path).isDirectory();
-}
-
 export default function(opts = {}) {
-  const {
-    watch,
-    coverage,
-    libraryName = 'umi',
-    cwd = process.cwd(),
-    moduleNameMapper,
-  } = opts;
+  const { cwd = process.cwd(), moduleNameMapper } = opts;
 
   const jestConfigFile = join(cwd, 'jest.config.js');
   let userJestConfig = {};
@@ -25,13 +15,10 @@ export default function(opts = {}) {
     userJestConfig = require(jestConfigFile); // eslint-disable-line
   }
 
-  let pagesPath = 'pages';
-  if (test(join(cwd, 'src/page'))) {
-    pagesPath = 'src/page';
-  }
-  if (test(join(cwd, 'src/pages'))) {
-    pagesPath = 'src/pages';
-  }
+  const {
+    moduleNameMapper: userModuleNameMapper,
+    ...restUserJestConfig
+  } = userJestConfig;
 
   const config = {
     rootDir: process.cwd(),
@@ -39,48 +26,33 @@ export default function(opts = {}) {
       require.resolve('./shim.js'),
       require.resolve('./setupTests.js'),
     ],
+    resolver: require.resolve('jest-pnp-resolver'),
     transform: {
       '\\.jsx?$': require.resolve('./transformers/jsTransformer'),
       '\\.tsx?$': require.resolve('./transformers/tsTransformer'),
+      '\\.svg$': require.resolve('./transformers/fileTransformer'),
     },
+    transformIgnorePatterns: ['node_modules/(?!(umi)/)'],
     testMatch: ['**/?(*.)(spec|test|e2e).(j|t)s?(x)'],
     moduleFileExtensions: ['js', 'jsx', 'ts', 'tsx', 'json'],
-    setupTestFrameworkScriptFile: require.resolve('./jasmine'),
+    setupFilesAfterEnv: [require.resolve('./jasmine')],
     moduleNameMapper: {
       '\\.(css|less|sass|scss)$': require.resolve('identity-obj-proxy'),
+      '\\.(jpg|jpeg|png|gif|eot|otf|webp|svg|ttf|woff|woff2|mp4|webm|wav|mp3|m4a|aac|oga)$': require.resolve(
+        './fileMock.js',
+      ),
       ...(moduleNameMapper || {}),
+      ...(userModuleNameMapper || {}),
     },
-    globals: {
-      'ts-jest': {
-        useBabelrc: true,
-      },
-    },
-    ...(coverage
-      ? {
-          collectCoverageFrom: [
-            'pages/**/*.{ts,tsx,js,jsx}',
-            'src/**/*.{ts,tsx,js,jsx}',
-            '!**/*.d.ts',
-          ],
-          collectCoverage: true,
-          coveragePathIgnorePatterns: [
-            `/${pagesPath}/.${libraryName}/`,
-            `/${pagesPath}/.${libraryName}-production/`,
-          ],
-        }
-      : {}),
-    ...(userJestConfig || {}),
+    ...(restUserJestConfig || {}),
   };
 
   return new Promise((resolve, reject) => {
-    jestCli
+    jest
       .runCLI(
         {
-          watch,
-          testPathPattern: process.argv
-            .slice(2)
-            .filter(arg => !arg.startsWith('-')),
           config: JSON.stringify(config),
+          ...opts,
         },
         [cwd],
       )

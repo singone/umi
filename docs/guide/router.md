@@ -1,14 +1,20 @@
-# 路由
+---
+sidebarDepth: 3
+---
 
-::: tip 提示
-下文介绍的路由使用可以在 [umi-examples/routes](https://github.com/umijs/umi-examples/tree/master/routes) 和 [umi-examples/routes-via-config](https://github.com/umijs/umi-examples/tree/master/routes-via-config) 里找到示例代码。
+# Router
+
+::: tip
+The routing usage described below can be found in [umi-examples/routes](https://github.com/umijs/umi-examples/tree/master/routes) and find the sample code in [umi-examples/routes-via-config](https://github.com/umijs/umi-examples/tree/master/routes-via-config).
 :::
 
-umi 会根据 `pages` 目录自动生成路由配置。
+Umi automatically generates routing configurations based on the `pages` directory.
 
-## 基础路由
+## Conventional Routing
 
-假设 `pages` 目录结构如下：
+### Basic Routing
+
+Assume that the `pages` directory structure is as follows:
 
 ```
 + pages/
@@ -18,21 +24,21 @@ umi 会根据 `pages` 目录自动生成路由配置。
   - index.js
 ```
 
-那么，umi 会自动生成路由配置如下：
+Then, umi will automatically generate the routing configuration as follows:
 
 ```js
 [
-  { path: '/': exact: true, component: './pages/index.js' },
-  { path: '/users/': exact: true, component: './pages/users/index.js' },
-  { path: '/users/list': exact: true, component: './pages/users/list.js' },
+  { path: '/', component: './pages/index.js' },
+  { path: '/users/', component: './pages/users/index.js' },
+  { path: '/users/list', component: './pages/users/list.js' },
 ]
 ```
 
-## 动态路由
+### Dynamic Routing
 
-umi 里约定，带 $ 前缀的目录或文件为动态路由。
+As agreed in umi, directories or files with the `$` prefix are dynamic routes.
 
-比如以下目录结构：
+For example, the following directory structure:
 
 ```
 + pages/
@@ -44,44 +50,44 @@ umi 里约定，带 $ 前缀的目录或文件为动态路由。
   - index.js
 ```
 
-会生成路由配置如下：
+The routing configuration will be generated as follows:
 
 ```js
 [
-  { path: '/', exact: true, component: './pages/index.js' },
-  { path: '/users/:id', exact: true, component: './pages/users/$id.js' },
-  { path: '/:post/', exact: true, component: './pages/$post/index.js' },
-  { path: '/:post/comments', exact: true, component: './pages/$post/comments.js' },
+  { path: '/', component: './pages/index.js' },
+  { path: '/users/:id', component: './pages/users/$id.js' },
+  { path: '/:post/', component: './pages/$post/index.js' },
+  { path: '/:post/comments', component: './pages/$post/comments.js' },
 ]
 ```
 
-## 可选的动态路由
+### Optional Dynamic Routing
 
-umi 里约定动态路由如果带 $ 后缀，则为可选动态路由。
+In umi, dynamic routing is an optional dynamic route if it has a `$` suffix.
 
-比如以下结构：
+For example, the following structure:
 
 ```
 + pages/
   + users/
-    $id$.js
+    - $id$.js
   - index.js
 ```
 
-会生成路由配置如下：
+The routing configuration will be generated as follows:
 
 ```js
 [
-  { path: '/': exact: true, component: './pages/index.js' },
-  { path: '/users/:id?': exact: true, component: './pages/users/$id$.js' },
+  { path: '/': component: './pages/index.js' },
+  { path: '/users/:id?': component: './pages/users/$id$.js' },
 ]
 ```
 
-## 嵌套路由
+### Nested Routing
 
-umi 里约定目录下有 `_layout.js` 时会以生成嵌套路由，以 `_layout.js` 为该目录的 layout 。
+When there is `_layout.js` in the umi directory, a nested route will be generated, with `_layout.js` as the layout of the directory.
 
-比如以下目录结构：
+For example, the following directory structure:
 
 ```
 + pages/
@@ -91,24 +97,24 @@ umi 里约定目录下有 `_layout.js` 时会以生成嵌套路由，以 `_layou
     - index.js
 ```
 
-会生成路由配置如下：
+The routing configuration will be generated as follows:
 
 ```js
 [
-  { path: '/users': exact: false, component: './pages/users/_layout.js'
+  { path: '/users', component: './pages/users/_layout.js',
     routes: [
-     { path: '/users/', exact: true, component: './pages/users/index.js' },
-     { path: '/users/:id', exact: true, component: './pages/users/$id.js' },
+     { path: '/users/', component: './pages/users/index.js' },
+     { path: '/users/:id', component: './pages/users/$id.js' },
    ],
   },
 ]
 ```
 
-## 全局 layout
+### Global Layout
 
-umi 里约定 `src` 目录下的 `layouts/index.js` 为全局路由，返回一个 React 组件，通过 `props.children` 渲染子组件。
+The convention `src/layouts/index.js` is a global route, returning a React component, and rendering the child components via `props.children`.
 
-比如：
+Example:
 
 ```js
 export default function(props) {
@@ -122,18 +128,18 @@ export default function(props) {
 }
 ```
 
-## 不同的全局 layout
+### Different Global Layout
 
-你可能需要针对不同路由输出不同的全局 layout，umi 不支持这样的配置，但你仍可以在 `layouts/index.js` 对 location.path 做区分，渲染不同的 layout 。
+You may need to output a different global layout for different routes. umi does not support such a configuration, but you can still distinguish between location.path and render different layouts in `layouts/index.js`.
 
-比如不想要针对 /login 输出简单布局，
+For example, if you want to output a simple layout for /login,
 
 ```js
 export default function(props) {
   if (props.location.pathname === '/login') {
     return <SimpleLayout>{ props.children }</SimpleLayout>
   }
-  
+
   return (
     <>
       <Header />
@@ -144,11 +150,11 @@ export default function(props) {
 }
 ```
 
-## 404 路由
+### 404 Routing
 
-umi 中约定 `pages` 目录下的 `404.js` 为 404 页面，需要返回 React 组件。
+The convention `pages/404.js` is a 404 page and needs to return a React component.
 
-比如：
+Example:
 
 ```js
 export default () => {
@@ -158,162 +164,105 @@ export default () => {
 };
 ```
 
-注：开发模式下，umi 会添加一个默认的 404 页面来辅助开发，但你仍然可通过精确地访问 /404 来验证 404 页面。
+> Note: In development mode, umi will add a default 404 page to aid development, but you can still verify the 404 page by precisely accessing `/404`.
 
-## 路由过滤
+### Extending Routing by Annotation
 
-如果你需要在 `pages` 下组织文件，那么有可能某些文件是不需要添加到路由的，那么你可以通过 [umi-plugin-routes](https://github.com/umijs/umi/tree/master/packages/umi-plugin-routes) 插件进行排除。
+The first comment of the contracted routing file is used to extend the route if it contains a configuration in the **yaml** format.
 
-比如以下目录结构：
-
-```
-+ pages
-  + users
-    + models
-      - a.js
-    + services
-      - a.js
-    - index.js
-```
-
-你应该只会想要 users/index.js 作为路由，所以需要排除掉 models 和 services 目录。
-
-先安装依赖，
-
-```bash
-$ npm install umi-plugin-routes --save-dev
-```
-
-然后配置 `.umirc.js` 如下：
-
-```js
-export default {
-  plugins: [
-    ['umi-plugin-routes', {
-      exclude: [
-        /models/,
-        /services/,
-      ],
-    }],
-  ]
-}
-```
-
-## 权限路由
-
-umi 是通过配置定制化的 Route 组件来实现权限路由的，如果你熟悉 react-router@4，应该会比较熟悉。
-
-比如以下目录结构：
+Example:
 
 ```
 + pages/
   - index.js
-  - list.js
 ```
 
-然后在 `.umirc.js` 里做如下配置：
+If `pages/index.js` contains:
 
 ```js
-export default {
-  pages: {
-    '/list': { Route: './routes/PrivateRoute.js' },
-    // 如果你使用了动态路由，/products/$id.js 或者 /products/$id/index.js这种结构
-    '/products/:id': { Route: './routes/PrivateRoute.js' },
-  },
-}
+/**
+ * title: Index Page
+ * Routes:
+ *   - ./src/routes/a.js
+ *   - ./src/routes/b.js
+ */
 ```
 
-则会自动生成以下路由配置：
+A route configuration is generated:
 
 ```js
 [
-  { path: '/': exact: true, component: './pages/index.js' },
-  { path: '/list': exact: true, component: './pages/list.js', Route: './routes/PrivateRoute.js' },
-  { path: '/products/:id': exact: true, component: './pages/list.js', Route: './routes/PrivateRoute.js' },
+  { path: '/', component: './index.js',
+    title: 'Index Page',
+    Routes: [ './src/routes/a.js', './src/routes/b.js' ],
+  },
 ]
 ```
 
-然后 umi 会用 `./routes/PrivateRoute.js` 来渲染 `/list`。
+## Configuration Routing
 
-`./routes/PrivateRoute.js` 文件示例：
+If you prefer to use a configured route, you can configure `routes`, **this configuration item will not be parsed for the `src/pages` directory**.
 
-```js
-import { Route } from 'react-router-dom';
-
-export default (args) => {
-  const { render, ...rest } = args;
-  return <Route
-    {...rest}
-    render={props =>
-      <div>
-        <div>PrivateRoute (routes/PrivateRoute.js)</div>
-        {
-          render(props)
-        }
-      </div>
-    }
-  />;
-}
-```
-
-注：`PrivateRoute` 里渲染子组件是通过 `render` 方法，**而非 Component 组件属性**。
-
-
-如果希望通过编程方式批量设置权限路由，可以利用`umi-plugin-routes`插件，修改`.umirc.js`如下：
-
-```javascript
-export default {
-  plugins: [
-    ['umi-plugin-routes', {
-      update(routes) {
-        // 指定Route属性为你的权限路由组件
-        // 例如：routes[0].Route = './routes/PrivateRoute.js';
-        return routes;
-      },
-    }],
-  ],
-}
-```
-
-
-## 配置式路由
-
-umi 推荐的路由方式是基于目录和文件的约定的，但如果你倾向于使用配置式的路由，可以在 `.umirc.js` 里配置 `routes` ，此配置存在时则不会对 pages 目录做解析。
-
-比如：
+Example:
 
 ```js
 export default {
   routes: [
-    { path: '/', exact: true, component: './a' },
-    { path: '/list', component: './b', Route: './routes/PrivateRoute.js' },
+    { path: '/', component: './a' },
+    { path: '/list', component: './b', Routes: ['./routes/PrivateRoute.js'] },
     { path: '/users', component: './users/_layout',
       routes: [
-        { path: '/users/detail', exact: true, component: './users/detail' },
-        { path: '/users/:id', exact: true, component: './users/id' }
+        { path: '/users/detail', component: './users/detail' },
+        { path: '/users/:id', component: './users/id' }
       ]
     },
   ],
 };
 ```
 
-注意：
+note:
 
-1. component 为指向文件的相对于 page(s) 的路径，**而非 React 组件**
-1. 支持通过 routes 实现嵌套路由
-1. 支持通过 Route 指定权限路由
+1. component is relative to the `src/pages` directory
 
-## 路由动效
+## Permission Routing
 
-路由动效应该是有多种实现方式，这里举 [react-transition-group](https://github.com/reactjs/react-transition-group) 的例子。
+The permission routing of umi is implemented by configuring the `Routes` attribute of the route. The convention is added by the yaml annotation, and the configuration formula can be directly matched.
 
-先安装依赖，
+For example, the following configuration:
 
-```bash
-$ npm install react-transition-group --save
+```js
+[
+  { path: '/', component: './pages/index.js' },
+  { path: '/list', component: './pages/list.js', Routes: ['./routes/PrivateRoute.js'] },
+]
 ```
 
-在 layout 组件（`layouts/index.js` 或者 pages 子目录下的 `_layout.js`）里在渲染子组件时用 TransitionGroup 和 CSSTransition 包裹一层，并以 `location.key` 为 key，
+Then umi will render `/list` with `./routes/PrivateRoute.js`.
+
+Example of `./routes/PrivateRoute.js` file:
+
+```js
+export default (props) => {
+  return (
+    <div>
+      <div>PrivateRoute (routes/PrivateRoute.js)</div>
+      { props.children }
+    </div>
+  );
+}
+```
+
+## Route Transition Effects
+
+There are several ways to implement route transition effects. Here is an example of [react-transition-group](https://github.com/reactjs/react-transition-group).
+
+Install dependencies first,
+
+```bash
+$ yarn add react-transition-group
+```
+
+In the layout component (`layouts/index.js` or `_layout.js` in the pages subdirectory), wrap a subassembly with `TransitionGroup` and `CSSTransition` and use `location.pathname` as the key.
 
 ```js
 import withRouter from 'umi/withRouter';
@@ -322,14 +271,14 @@ import { TransitionGroup, CSSTransition } from "react-transition-group";
 export default withRouter(
   ({ location }) =>
     <TransitionGroup>
-      <CSSTransition key={location.key} classNames="fade" timeout={300}>
+      <CSSTransition key={location.pathname} classNames="fade" timeout={300}>
         { children }
       </CSSTransition>
     </TransitionGroup>
 )
 ```
 
-上面用到的 `fade` 样式，可以在 `src` 下的 `global.css` 里定义：
+The `fade` style used above can be defined in `global.css` under `src`:
 
 ```css
 .fade-enter {
@@ -343,25 +292,25 @@ export default withRouter(
 }
 ```
 
-## 面包屑
+## Bread Crumbs
 
-面包屑也是有多种实现方式，这里举 [react-router-breadcrumbs-hoc](https://github.com/icd2k3/react-router-breadcrumbs-hoc) 的例子。
+There are many ways to implement breadcrumbs. Here is an example of [react-router-breadcrumbs-hoc](https://github.com/icd2k3/react-router-breadcrumbs-hoc).
 
-先安装依赖，
+Install dependencies first,
 
 ```bash
-$ npm install react-router-breadcrumbs-hoc --save
+$ yarn add react-router-breadcrumbs-hoc
 ```
 
-然后实现一个 `Breakcrumbs.js`，比如：
+Then implement a `Breakcrumbs.js`, such as:
 
 ```js
 import NavLink from 'umi/navlink';
 import withBreadcrumbs from 'react-router-breadcrumbs-hoc';
 
-// 更多配置请移步 https://github.com/icd2k3/react-router-breadcrumbs-hoc
+// More configuration please go to https://github.com/icd2k3/react-router-breadcrumbs-hoc
 const routes = [
-  { path: '/', breadcrumb: '首页' },
+  { path: '/', breadcrumb: 'home' },
   { path: '/list', breadcrumb: 'List Page' },
 ];
 
@@ -379,21 +328,21 @@ export default withBreadcrumbs(routes)(({ breadcrumbs }) => (
 ));
 ```
 
-然后在需要的地方引入此 React 组件即可。
+Then introduce this React component where you need it.
 
-## 启用 Hash 路由
+## Enable Hash Routing
 
-umi 默认是用的 Browser History，如果要用 Hash History，需在 `.umirc.js` 里配置：
+Umi defaults to the Browser History. If you want to use Hash History, you need to configure:
 
 ```js
 export default {
-  hashHistory: true,
+  history: 'hash',
 }
 ```
 
-## Scroll to top
+## Scroll to Top
 
-在 layout 组件（`layouts/index.js` 或者 pages 子目录下的 `_layout.js`）的 componentDidUpdate 里决定是否 scroll to top，比如：
+Decide whether to scroll to top in the `componentDidUpdate` of the layout component (`layouts/index.js` or the `_layout.js` in the pages subdirectory), for example:
 
 ```js
 import { Component } from 'react';
@@ -413,6 +362,6 @@ class Layout extends Component {
 export default withRouter(Layout);
 ```
 
-## 参考
+## Reference
 
 * [https://reacttraining.com/react-router/](https://reacttraining.com/react-router/)

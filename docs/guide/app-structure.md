@@ -1,48 +1,146 @@
-# 目录约定
+# Directory and Convention
 
-在文件和目录的组织上，UmiJS 尽量选择约定的方式。
+In the organization of files and directories, umi tries to choose the agreed upon way.
 
-## 复杂应用
+The directory structure of a complex application is as follows:
 
-一个复杂应用的目录结构如下：
-
-```bash
+```
 .
-├── dist/                          // 默认的 build 输出目录
-├── mock/                          // mock 文件所在目录，基于 express
-└── src/                           // 源码目录，可选
-    ├── layouts/index.js           // 全局布局
-    ├── pages/                     // 页面目录，里面的文件即路由
-        ├── .umi/                  // dev 临时目录，需添加到 .gitignore
-        ├── .umi-production/       // build 临时目录，会自动删除
-        ├── document.ejs           // HTML 模板
-        ├── 404.js                 // 404 页面 访问路由：/404
-        ├── page1.js               // 页面 1，任意命名，导出 react 组件 访问路由：/page1
-        ├── page1.test.js          // 用例文件，umi test 会匹配所有 .test.js 和 .e2e.js 结尾的文件 
-        ├── page2.js               // 页面 2，任意命名，导出 react 组件 访问路由：/page2
-        └── page3                  // 包含子路由的页面
-            ├──_layout.js          // 嵌套路由 page3 的局部布局
-            └── page4.js           // 页面 2，任意命名，导出 react 组件 访问路由：/page3/page4
-    ├── global.css                 // 约定的全局样式文件，自动引入，也可以用 global.less
-    ├── global.js                  // 可以在这里加入 polyfill
-├── .umirc.js                      // umi 配置
+├── dist/                           // default build output directory
+├── mock/                           // The directory where the mock file is located, based on express
+├── config/
+    ├── config.js                   // umi configuration, same as .umirc.js, choose one
+└── src/                            // source directory, optional
+    ├──layouts/index.js             // global layout
+    ├── pages/                      // page directory, the file inside is the route
+        ├── .umi/                   // dev temp directory, need to be added to .gitignore
+        ├── .umi-production/        // build temporary directory, will be deleted automatically
+        ├── document.ejs            // HTML template
+        ├── 404.js                  // 404 page
+        ├── page1.js                // page 1, arbitrarily named, export react component
+        ├── page1.test.js           // Use case file, umi test will match all files ending in .test.js and .e2e.js
+        └── page2.js                // page 2, arbitrarily named
+    ├── global.css                  // Conventional global style files, imported automatically, or global.less
+    ├── global.js                   // can add polyfill here
+├── .umirc.js                       // umi configuration, same as config/config.js, choose one
+├── .env                            // environment variable
 └── package.json
 ```
 
-::: warning
-注意：src 目录是可选的，可以有，也可以没有。
-:::
+## ES6 Grammar
 
-以上大部分的约定和配置文件都是可选的，唯一强约定只有 `pages` 目录。
+Configuration files, mock files, etc. are registered in real time with `@babel/register`, so you can use ES6 syntax and es modules just like files in src.
 
-## 简单应用
+## dist
 
-而如果你的应用很简单，目录结构只要这样就好。
+The default output path can be modified by configuring `outputPath`.
 
-```bash
-.
-├── pages/
-    ├── list.js
-    └── index.js
-└── package.json
+## mock
+
+It is agreed that all `.js` files in the mock directory will be parsed as mock files.
+
+For example, create a new `mock/users.js` with the following contents:
+
+```js
+export default {
+  '/api/users': ['a', 'b'],
+}
+```
+
+Then visit [http://localhost:8000/api/users](http://localhost:8000/api/users) in your browser to see `['a', 'b']`.
+
+## src
+
+By convention, `src` is the source directory. But optional, simple items can be added without the `src` directory.
+
+For example: the effect of the following two directory structures is the same.
+
+```
++ src
+  + pages
+    - index.js
+  + layouts
+    - index.js
+- .umirc.js
+```
+
+```
++ pages
+  - index.js
++ layouts
+  - index.js
+- .umirc.js
+```
+
+## src/layouts/index.js
+
+The global layout is actually a layer outside the route.
+
+For example, your route is:
+
+```
+[
+  { path: '/', component: './pages/index' },
+  { path: '/users', component: './pages/users' },
+]
+```
+
+If there is `layouts/index.js`, then the route becomes:
+
+```
+[
+  { path: '/', component: './layouts/index', routes: [
+    { path: '/', component: './pages/index' },
+    { path: '/users', component: './pages/users' },
+  ] }
+]
+```
+
+## src/pages
+
+All the `(j|t)sx?` files under the pages are the routes. For more information on contracted routing, go to the Routing chapter.
+
+## src/pages/404.js
+
+404 page. Note that there is a 404 prompt page provided by the built-in umi in development mode, so you can access this page only by explicitly accessing `/404`.
+
+## src/pages/document.ejs
+
+When this file is available, it overrides the default HTML template. Needs to include at least the following code:
+
+```html
+<div id="root"></div>
+```
+
+## src/pages/.umi
+
+This is a temporary directory produced by umi dev. It contains `umi.js` and `router.js` by default, and some plugins will generate some other temporary files here. You can do some validation here, **but please don't modify the code directly here, umi restart or file modification under pages will regenerate the files in this folder.**
+
+## src/pages/.umi-production
+
+Same as `src/pages/.umi`, but generated in `umi build`, it will be automatically deleted after `umi build`.
+
+## .test.js and .e2e.js
+
+The test file, `umi test` will find all the .(test|e2e).(j|t)s files to run the test.
+
+## src/global.(j|t)sx?
+
+At the beginning of the entry file is automatically introduced, you can consider adding polyfill here.
+
+## src/global.(css|less|sass|scss)
+
+This file does not go css modules, is automatically introduced, you can write some global styles, or do some style coverage.
+
+## .umirc.js and config/config.js
+
+Umi's configuration file, choose one.
+
+## .env
+
+Environment variables, such as:
+
+```
+CLEAR_CONSOLE=none
+BROWSER=none
 ```

@@ -1,3 +1,4 @@
+import fs from 'fs';
 import openBrowser from 'react-dev-utils/openBrowser';
 import webpack from 'webpack';
 import assert from 'assert';
@@ -13,6 +14,12 @@ const isInteractive = process.stdout.isTTY;
 const DEFAULT_PORT = parseInt(process.env.PORT, 10) || 8000;
 const HOST = process.env.HOST || '0.0.0.0';
 const PROTOCOL = process.env.HTTPS ? 'https' : 'http';
+const CERT =
+  process.env.HTTPS && process.env.CERT
+    ? fs.readFileSync(process.env.CERT)
+    : '';
+const KEY =
+  process.env.HTTPS && process.env.KEY ? fs.readFileSync(process.env.KEY) : '';
 const noop = () => {};
 
 process.env.NODE_ENV = 'development';
@@ -29,6 +36,7 @@ export default function dev({
   proxy,
   port,
   base,
+  serverConfig: serverConfigFromOpts = {},
 }) {
   assert(webpackConfig, 'webpackConfig must be supplied');
   choosePort(port || DEFAULT_PORT)
@@ -40,41 +48,48 @@ export default function dev({
       const compiler = webpack(webpackConfig);
 
       let isFirstCompile = true;
+      const IS_CI = !!process.env.CI;
+      const SILENT = !!process.env.SILENT;
       const urls = prepareUrls(PROTOCOL, HOST, port, base);
       compiler.hooks.done.tap('af-webpack dev', stats => {
         if (stats.hasErrors()) {
           // make sound
           // ref: https://github.com/JannesMeyer/system-bell-webpack-plugin/blob/bb35caf/SystemBellPlugin.js#L14
-          process.stdout.write('\x07');
+          if (process.env.SYSTEM_BELL !== 'none') {
+            process.stdout.write('\x07');
+          }
           return;
         }
 
         let copied = '';
-        if (isFirstCompile) {
-          require('clipboardy').write(urls.localUrlForBrowser);
-          copied = chalk.dim('(copied to clipboard)');
-        }
-
-        console.log();
-        console.log(
-          [
-            `  App running at:`,
-            `  - Local:   ${chalk.cyan(urls.localUrlForTerminal)} ${copied}`,
-            `  - Network: ${chalk.cyan(urls.lanUrlForTerminal)}`,
-          ].join('\n'),
-        );
-        console.log();
-
-        if (isFirstCompile) {
-          isFirstCompile = false;
-          openBrowser(urls.localUrlForBrowser);
-          send({ type: DONE });
+        if (isFirstCompile && !IS_CI && !SILENT) {
+          try {
+            require('clipboardy').writeSync(urls.localUrlForBrowser);
+            copied = chalk.dim('(copied to clipboard)');
+          } catch (e) {
+            copied = chalk.red(`(copy to clipboard failed)`);
+          }
+          console.log();
+          console.log(
+            [
+              `  App running at:`,
+              `  - Local:   ${chalk.cyan(urls.localUrlForTerminal)} ${copied}`,
+              `  - Network: ${chalk.cyan(urls.lanUrlForTerminal)}`,
+            ].join('\n'),
+          );
+          console.log();
         }
 
         onCompileDone({
           isFirstCompile,
           stats,
         });
+
+        if (isFirstCompile) {
+          isFirstCompile = false;
+          openBrowser(urls.localUrlForBrowser);
+          send({ type: DONE });
+        }
       });
 
       const serverConfig = {
@@ -95,6 +110,8 @@ export default function dev({
         host: HOST,
         proxy,
         https: !!process.env.HTTPS,
+        cert: CERT,
+        key: KEY,
         contentBase: contentBase || process.env.CONTENT_BASE,
         before(app) {
           (beforeMiddlewares || []).forEach(middleware => {
@@ -111,6 +128,8 @@ export default function dev({
             app.use(middleware);
           });
         },
+        ...serverConfigFromOpts,
+        ...(webpackConfig.devServer || {}),
       };
       const server = new WebpackDevServer(compiler, serverConfig);
 

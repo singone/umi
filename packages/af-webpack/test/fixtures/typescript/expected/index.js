@@ -96,11 +96,11 @@ module.exports = __webpack_require__(1);
 /***/ (function(module, exports) {
 
 function greeter(person) {
-    return "Hello, " + person;
+  return "Hello, " + person;
 }
+
 var user = "Jane User";
 document.body.innerHTML = greeter(user);
-
 
 /***/ })
 /******/ ]);

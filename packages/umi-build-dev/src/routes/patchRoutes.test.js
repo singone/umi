@@ -6,6 +6,11 @@ describe('patchRoutes', () => {
     expect(routes).toEqual([{ path: '/a' }]);
   });
 
+  it('without path', () => {
+    const routes = patchRoutes([{ component: 'a' }]);
+    expect(routes).toEqual([{ component: 'a' }]);
+  });
+
   it('throw error if use dynamic route with exportStatic', () => {
     expect(() => {
       patchRoutes([{ path: '/:a' }], {
@@ -53,6 +58,13 @@ describe('patchRoutes', () => {
         routes: [{ path: '/c/d.html' }, { path: '/c/e.html' }],
       },
     ]);
+  });
+
+  it('exportStatic.htmlSuffix with no path route', () => {
+    const routes = patchRoutes([{ path: '/a' }, { component: './404.js' }], {
+      exportStatic: { htmlSuffix: true },
+    });
+    expect(routes).toEqual([{ path: '/a.html' }, { component: './404.js' }]);
   });
 
   it('copy /index.html for / if exportStatic', () => {
@@ -205,6 +217,21 @@ describe('patchRoutes', () => {
     ]);
   });
 
+  it('404 with redirect', () => {
+    const routes = patchRoutes(
+      [{ path: '/404', redirect: '/foo' }, { path: '/b' }],
+      {
+        disableRedirectHoist: true,
+      },
+      /* isProduction */ true,
+    );
+    expect(routes).toEqual([
+      { path: '/404', redirect: '/foo' },
+      { path: '/b' },
+      { redirect: '/foo' },
+    ]);
+  });
+
   it('support old meta Route which is deprecated', () => {
     const routes = patchRoutes([{ path: '/b', meta: { Route: './A' } }]);
     expect(routes).toEqual([{ path: '/b', Route: './A' }]);
@@ -231,6 +258,38 @@ describe('patchRoutes', () => {
         path: '/c',
         routes: [
           { path: '/c/d', component: 'D' },
+          { path: '/c/f', component: 'F' },
+        ],
+      },
+    ]);
+  });
+
+  it('disable redirect hoist', () => {
+    const routes = patchRoutes(
+      [
+        { path: '/a', component: './A' },
+        { path: '/b', redirect: '/c' },
+        {
+          path: '/c',
+          routes: [
+            { path: '/c/d', component: 'D' },
+            { path: '/c/e', redirect: '/c/f' },
+            { path: '/c/f', component: 'F' },
+          ],
+        },
+      ],
+      {
+        disableRedirectHoist: true,
+      },
+    );
+    expect(routes).toEqual([
+      { path: '/a', component: './A' },
+      { path: '/b', redirect: '/c' },
+      {
+        path: '/c',
+        routes: [
+          { path: '/c/d', component: 'D' },
+          { path: '/c/e', redirect: '/c/f' },
           { path: '/c/f', component: 'F' },
         ],
       },

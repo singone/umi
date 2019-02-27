@@ -1,6 +1,7 @@
 import babelJest from 'babel-jest';
+import { dirname } from 'path';
 
-export default babelJest.createTransformer({
+module.exports = babelJest.createTransformer({
   presets: [
     [
       require.resolve('babel-preset-umi'),
@@ -14,9 +15,9 @@ export default babelJest.createTransformer({
       require.resolve('babel-plugin-module-resolver'),
       {
         alias: {
-          'ts-jest-babel-7': require.resolve('ts-jest-babel-7'),
-          react: require.resolve('react'),
-          'react-dom': require.resolve('react-dom'),
+          'ts-jest': require.resolve('ts-jest'),
+          react: dirname(require.resolve('react/package')),
+          'react-dom': dirname(require.resolve('react-dom/package')),
           enzyme: require.resolve('enzyme'),
         },
       },

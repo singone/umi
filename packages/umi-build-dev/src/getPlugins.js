@@ -1,7 +1,9 @@
 import resolve from 'resolve';
 import assert from 'assert';
+import chalk from 'chalk';
 import registerBabel, { addBabelRegisterFiles } from './registerBabel';
 import isEqual from './isEqual';
+import getCodeFrame from './utils/getCodeFrame';
 
 const debug = require('debug')('umi-build-dev:getPlugin');
 
@@ -12,8 +14,15 @@ export default function(opts = {}) {
   const builtInPlugins = [
     './plugins/commands/dev',
     './plugins/commands/build',
+    './plugins/commands/inspect',
     './plugins/commands/test',
+    './plugins/commands/help',
     './plugins/commands/generate',
+    './plugins/commands/rm',
+    './plugins/commands/config',
+    './plugins/commands/block',
+    './plugins/commands/ui',
+    './plugins/commands/version',
     './plugins/global-js',
     './plugins/global-css',
     './plugins/base',
@@ -24,17 +33,20 @@ export default function(opts = {}) {
     './plugins/afwebpack-config',
     './plugins/mountElementId',
     './plugins/404', // 404 must after mock
+    // Disable this since it make umi build exit very slowly (4s+)
+    // './plugins/atoolMonitor',
+    './plugins/targets',
   ];
 
   const pluginsObj = [
     // builtIn 的在最前面
     ...builtInPlugins.map(p => {
-      const apply = require(p); // eslint-disable-line
       let opts;
       if (Array.isArray(p)) {
         opts = p[1]; // eslint-disable-line
-        p = [0];
+        p = p[0];
       }
+      const apply = require(p); // eslint-disable-line
       return {
         id: p.replace(/^.\//, 'built-in:'),
         apply: apply.default || apply,
@@ -56,7 +68,7 @@ function pluginToPath(plugins, { cwd }) {
   return (plugins || []).map(p => {
     assert(
       Array.isArray(p) || typeof p === 'string',
-      `Plugin config should be String or Array, but got ${p}`,
+      `Plugin config should be String or Array, but got ${chalk.red(typeof p)}`,
     );
     if (typeof p === 'string') {
       p = [p];
@@ -70,7 +82,20 @@ function pluginToPath(plugins, { cwd }) {
         opts,
       ];
     } catch (e) {
-      throw new Error(`Plugin ${path} can't be resolved`);
+      throw new Error(
+        `
+Plugin ${chalk.underline.cyan(path)} can't be resolved
+
+   Please try the following solutions:
+
+     1. checkout the plugins config in your config file (.umirc.js or config/config.js)
+     ${
+       path.charAt(0) !== '.' && path.charAt(0) !== '/'
+         ? `2. install ${chalk.underline.cyan(path)} via npm/yarn`
+         : ''
+     }
+`.trim(),
+      );
     }
   });
 }
@@ -80,7 +105,7 @@ function getUserPlugins(plugins, { cwd }) {
 
   // 用户给的插件需要做 babel 转换
   if (pluginPaths.length) {
-    addBabelRegisterFiles(pluginPaths.map(p => p[0]));
+    addBabelRegisterFiles(pluginPaths.map(p => p[0]), { cwd });
     registerBabel({
       cwd,
     });
@@ -88,7 +113,18 @@ function getUserPlugins(plugins, { cwd }) {
 
   return pluginPaths.map(p => {
     const [path, opts] = p;
-    const apply = require(path); // eslint-disable-line
+    let apply;
+    try {
+      apply = require(path); // eslint-disable-line
+    } catch (e) {
+      throw new Error(
+        `
+Plugin ${chalk.cyan.underline(path)} require failed
+
+${getCodeFrame(e)}
+      `.trim(),
+      );
+    }
     return {
       id: path.replace(makesureLastSlash(cwd), 'user:'),
       apply: apply.default || apply,

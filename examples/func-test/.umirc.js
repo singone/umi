@@ -1,4 +1,15 @@
 export default {
-  plugins: ['umi-plugin-react/lib/plugins/antd', './plugins/render-wrapper'],
-  mountElementId: 'container',
+  plugins: [
+    [
+      '../../packages/umi-plugin-react/lib/index.js',
+      {
+        antd: true,
+        dynamicImport: {
+          webpackChunkName: true,
+        },
+        title: '默认标题',
+      },
+    ],
+  ],
+  exportStatic: true,
 };

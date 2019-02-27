@@ -1,11 +1,11 @@
 import assert from 'assert';
-import mkdirp from 'mkdirp';
-import { dirname, join, relative } from 'path';
-import { writeFileSync, existsSync, readFileSync } from 'fs';
-import isPlainObject from 'is-plain-object';
+import { join, relative, extname } from 'path';
+import { existsSync, readFileSync } from 'fs';
+import { isPlainObject } from 'lodash';
 import ejs from 'ejs';
 import { minify } from 'html-minifier';
 import { matchRoutes } from 'react-router-config';
+import cheerio from 'cheerio';
 import formatChunksMap from './formatChunksMap';
 
 export default class HTMLGenerator {
@@ -34,11 +34,14 @@ export default class HTMLGenerator {
 
     const flatRoutes = this.getFlatRoutes(this.routes);
     assert(flatRoutes.length, 'no valid routes found');
-    if (this.config.exportStatic) {
-      this.exportRoutes(flatRoutes);
-    } else {
-      this.exportRoute({ path: '/' }, 'index.html');
-    }
+
+    const routes = this.config.exportStatic ? flatRoutes : [{ path: '/' }];
+    return routes.map(route => {
+      return {
+        filePath: this.getHtmlPath(route.path),
+        content: this.getContent(route),
+      };
+    });
   }
 
   routeWithoutRoutes(route) {
@@ -62,28 +65,6 @@ export default class HTMLGenerator {
     }, []);
   }
 
-  exportRoutes(routes) {
-    routes.forEach(route => {
-      const content = this.getContent(route);
-      const filePath = join(
-        this.paths.absOutputPath,
-        this.getHtmlPath(route.path),
-      );
-      mkdirp.sync(dirname(filePath));
-      writeFileSync(filePath, content, 'utf-8');
-    });
-  }
-
-  exportRoute(route, opts = {}) {
-    const content = this.getContent(route);
-    const filePath = join(
-      this.paths.absOutputPath,
-      opts.filePath || this.getHtmlPath(route.path),
-    );
-    mkdirp.sync(dirname(filePath));
-    writeFileSync(filePath, content, 'utf-8');
-  }
-
   getHtmlPath(path) {
     const { exportStatic } = this.config;
     const htmlSuffix =
@@ -97,7 +78,7 @@ export default class HTMLGenerator {
     path = path.replace(/^\//, '');
     path = path.replace(/\/$/, '');
 
-    if (htmlSuffix) {
+    if (htmlSuffix || path === 'index.html') {
       return `${path}`;
     } else {
       return `${path}/index.html`;
@@ -107,7 +88,7 @@ export default class HTMLGenerator {
   getMatchedContent(path) {
     const { config } = this;
     if (config.exportStatic) {
-      const branch = matchRoutes(this.routes, path).filter(r => r.path);
+      const branch = matchRoutes(this.routes, path).filter(r => r.route.path);
       const route = branch.length ? branch[branch.length - 1].route : { path };
       return this.getContent(route);
     } else {
@@ -125,6 +106,7 @@ export default class HTMLGenerator {
     if (route.document) {
       const docPath = join(cwd, route.document);
       assert(existsSync(docPath), `document ${route.document} don't exists.`);
+      return docPath;
     }
 
     if (existsSync(absPageDocumentPath)) {
@@ -136,11 +118,9 @@ export default class HTMLGenerator {
 
   getStylesContent(styles) {
     return styles
-      .map(style => {
-        const { content = '' } = style;
-        delete style.content;
-        const attrs = Object.keys(style).reduce((memo, key) => {
-          return memo.concat(`${key}="${style[key]}"`);
+      .map(({ content, ...attrs }) => {
+        attrs = Object.keys(attrs).reduce((memo, key) => {
+          return memo.concat(`${key}="${attrs[key]}"`);
         }, []);
         return [
           `<style${attrs.length ? ' ' : ''}${attrs.join(' ')}>`,
@@ -184,12 +164,10 @@ export default class HTMLGenerator {
 
   getScriptsContent(scripts) {
     return scripts
-      .map(script => {
-        if (script.content) {
-          const { content } = script;
-          delete script.content;
-          const attrs = Object.keys(script).reduce((memo, key) => {
-            return memo.concat(`${key}="${script[key]}"`);
+      .map(({ content, ...attrs }) => {
+        if (content && !attrs.src) {
+          attrs = Object.keys(attrs).reduce((memo, key) => {
+            return memo.concat(`${key}="${attrs[key]}"`);
           }, []);
           return [
             `<script${attrs.length ? ' ' : ''}${attrs.join(' ')}>`,
@@ -200,8 +178,8 @@ export default class HTMLGenerator {
             '</script>',
           ].join('\n');
         } else {
-          const attrs = Object.keys(script).reduce((memo, key) => {
-            return memo.concat(`${key}="${script[key]}"`);
+          attrs = Object.keys(attrs).reduce((memo, key) => {
+            return memo.concat(`${key}="${attrs[key]}"`);
           }, []);
           return `<script ${attrs.join(' ')}></script>`;
         }
@@ -210,16 +188,16 @@ export default class HTMLGenerator {
   }
 
   getHashedFileName(filename) {
-    const isProduction = this.env === 'production';
-    if (isProduction) {
+    // css is optional
+    if (extname(filename) === '.js') {
       assert(
         this.chunksMap[filename],
-        `file ${filename} don't exists in chunksMap`,
+        `file ${filename} don't exists in chunksMap ${JSON.stringify(
+          this.chunksMap,
+        )}`,
       );
-      return this.chunksMap[filename];
-    } else {
-      return filename;
     }
+    return this.chunksMap[filename];
   }
 
   getContent(route) {
@@ -229,9 +207,11 @@ export default class HTMLGenerator {
     let context = {
       route,
       config: this.config,
+      publicPath: this.publicPath,
+      ...(this.config.context || {}),
       env: this.env,
     };
-    if (this.modifyContext) context = this.modifyContext(context);
+    if (this.modifyContext) context = this.modifyContext(context, { route });
 
     const tplPath = this.getDocumentTplPath(route);
     const relTplPath = relative(cwd, tplPath);
@@ -252,8 +232,9 @@ export default class HTMLGenerator {
     });
 
     // validate tpl
+    const $ = cheerio.load(html);
     assert(
-      html.includes(`<div id="${this.config.mountElementId}"></div>`),
+      $(`#${this.config.mountElementId}`).length === 1,
       `Document ${relTplPath} must contain <div id="${
         this.config.mountElementId
       }"></div>`,
@@ -264,6 +245,12 @@ export default class HTMLGenerator {
     let scripts = [];
     let styles = [];
     let headScripts = [];
+    let chunks = ['umi'];
+
+    if (this.modifyChunks) chunks = this.modifyChunks(chunks, { route });
+    chunks = chunks.map(chunk => {
+      return isPlainObject(chunk) ? chunk : { name: chunk };
+    });
 
     let routerBaseStr = JSON.stringify(this.config.base || '/');
     const publicPath = this.publicPath || '/';
@@ -273,7 +260,7 @@ export default class HTMLGenerator {
       routerBaseStr = `location.pathname.split('/').slice(0, -${route.path.split(
         '/',
       ).length - 1}).concat('').join('/')`;
-      publicPathStr = 'location.origin + window.routerBase';
+      publicPathStr = `location.protocol + '//' + location.hostname + (location.port ? ':' + location.port : '') + window.routerBase`;
     }
 
     if (this.modifyRouterBaseStr) {
@@ -291,24 +278,43 @@ export default class HTMLGenerator {
         ...(setPublicPath ? [`window.publicPath = ${publicPathStr};`] : []),
       ].join('\n'),
     });
-    scripts.push({
-      src: `<%= pathToPublicPath %>${this.getHashedFileName('umi.js')}`,
+
+    const getChunkPath = fileName => {
+      const hashedFileName = this.getHashedFileName(fileName);
+      if (hashedFileName) {
+        return `__PATH_TO_PUBLIC_PATH__${hashedFileName}`;
+      } else {
+        return null;
+      }
+    };
+
+    chunks.forEach(({ name, headScript }) => {
+      const chunkPath = getChunkPath(`${name}.js`);
+      if (chunkPath) {
+        (headScript ? headScripts : scripts).push({
+          src: chunkPath,
+        });
+      }
     });
 
-    if (this.modifyMetas) metas = this.modifyMetas(metas);
-    if (this.modifyLinks) links = this.modifyLinks(links);
-    if (this.modifyScripts) scripts = this.modifyScripts(scripts);
-    if (this.modifyStyles) styles = this.modifyStyles(styles);
-    if (this.modifyHeadScripts)
-      headScripts = this.modifyHeadScripts(headScripts);
-
-    if (this.env === 'production' && this.chunksMap['umi.css']) {
-      // umi.css should be the last one stylesheet
-      links.push({
-        rel: 'stylesheet',
-        href: `<%= pathToPublicPath %>${this.getHashedFileName('umi.css')}`,
-      });
+    if (this.modifyMetas) metas = this.modifyMetas(metas, { route });
+    if (this.modifyLinks) links = this.modifyLinks(links, { route });
+    if (this.modifyScripts) scripts = this.modifyScripts(scripts, { route });
+    if (this.modifyStyles) styles = this.modifyStyles(styles, { route });
+    if (this.modifyHeadScripts) {
+      headScripts = this.modifyHeadScripts(headScripts, { route });
     }
+
+    // umi.css should be the last stylesheet
+    chunks.forEach(({ name }) => {
+      const chunkPath = getChunkPath(`${name}.css`);
+      if (chunkPath) {
+        links.push({
+          rel: 'stylesheet',
+          href: chunkPath,
+        });
+      }
+    });
 
     // insert tags
     html = html.replace(
@@ -340,11 +346,17 @@ ${scripts.length ? this.getScriptsContent(scripts) : ''}
       exportStatic && exportStatic.dynamicRoot
         ? relPathToPublicPath
         : publicPath;
-    html = html.replace(/<%= pathToPublicPath %>/g, pathToPublicPath);
+
+    html = html
+      .replace(/__PATH_TO_PUBLIC_PATH__/g, pathToPublicPath)
+      .replace(/<%= PUBLIC_PATH %>/g, pathToPublicPath);
 
     if (this.modifyHTML) {
-      html = this.modifyHTML(html, { route });
+      html = this.modifyHTML(html, { route, getChunkPath });
     }
+
+    // Since this.modifyHTML will produce new __PATH_TO_PUBLIC_PATH__
+    html = html.replace(/__PATH_TO_PUBLIC_PATH__/g, pathToPublicPath);
 
     if (this.minify) {
       html = minify(html, {

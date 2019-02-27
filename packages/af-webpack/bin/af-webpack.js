@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 const getConfig = require('../getConfig');
-const getUserConfig = require('../getUserConfig');
+const getUserConfig = require('../lib/getUserConfig');
 
 const cwd = process.cwd();
 const webpackConfig = getWebpackConfig();
@@ -25,14 +25,15 @@ switch (process.argv[2]) {
 }
 
 function getWebpackConfig() {
-  const { config: userConfig } = getUserConfig({
+  const { config: userConfig } = getUserConfig.default({
     cwd,
+    configFile: process.env.AF_CONFIG_FILE || '.webpackrc'
   });
   return getConfig.default({
-    ...userConfig,
-    cwd,
     entry: {
       index: './index.js',
     },
+    ...userConfig,
+    cwd,
   });
 }

@@ -1,19 +1,23 @@
 import chalk from 'chalk';
+import notify from 'umi-notify';
 import createRouteMiddleware from './createRouteMiddleware';
 import { unwatch } from '../../../getConfig/watch';
 import getRouteManager from '../getRouteManager';
 import getFilesGenerator from '../getFilesGenerator';
 
 export default function(api) {
-  const { service, config } = api;
+  const { service, config, log, debug } = api;
   const { cwd } = service;
 
   api.registerCommand(
     'dev',
     {
       webpack: true,
+      description: 'start a dev server for development',
     },
     (args = {}) => {
+      notify.onDevStart({ name: 'umi', version: 2 });
+
       const RoutesManager = getRouteManager(service);
       RoutesManager.fetchRoutes();
 
@@ -25,17 +29,27 @@ export default function(api) {
         RoutesManager,
         mountElementId: config.mountElementId,
       });
+      debug('generate files');
       filesGenerator.generate();
 
       let server = null;
 
       // Add more service methods.
       service.restart = why => {
-        if (!server) return;
+        if (!server) {
+          log.debug(
+            `Server is not ready, ${chalk.underline.cyan(
+              'api.restart',
+            )} does not work.`,
+          );
+          return;
+        }
         if (why) {
-          console.log(chalk.green(`Since ${why}, try to restart server`));
+          log.pending(
+            `Since ${chalk.cyan.underline(why)}, try to restart server...`,
+          );
         } else {
-          console.log(chalk.green(`Try to restart server`));
+          log.pending(`Try to restart server...`);
         }
         unwatch();
         filesGenerator.unwatch();
@@ -74,6 +88,7 @@ export default function(api) {
       service
         ._applyPluginsAsync('_beforeDevServerAsync')
         .then(() => {
+          debug('start dev server with af-webpack/dev');
           require('af-webpack/dev').default({
             cwd,
             port,
@@ -89,7 +104,11 @@ export default function(api) {
               initialValue: [],
             }),
             afterMiddlewares: service.applyPlugins('addMiddleware', {
-              initialValue: [createRouteMiddleware(service)],
+              initialValue: [
+                ...(process.env.ROUTE_MIDDLEWARE !== 'none'
+                  ? [createRouteMiddleware(service)]
+                  : []),
+              ],
             }),
             beforeServer(devServer) {
               server = devServer;
@@ -104,17 +123,24 @@ export default function(api) {
               startWatch();
             },
             onCompileDone({ isFirstCompile, stats }) {
+              service.__chunks = stats.compilation.chunks;
               service.applyPlugins('onDevCompileDone', {
                 args: {
                   isFirstCompile,
                   stats,
                 },
               });
+              if (isFirstCompile) {
+                notify.onDevComplete({
+                  name: 'umi',
+                  version: 2,
+                });
+              }
             },
           });
         })
         .catch(e => {
-          console.error(e);
+          log.error(e);
         });
     },
   );

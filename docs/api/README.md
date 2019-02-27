@@ -4,45 +4,48 @@ sidebarDepth: 2
 
 # API
 
-## 路由
+## Route
 
 ### umi/link
-通过声明的方式做路由跳转。
 
-例子：
+Navigation via route declaration.
+
+Example:
 
 ```markup
 import Link from 'umi/link';
 
 export default () => {
   <div>
-    /* 普通使用 */
+    /* Normal use */
     <Link to="/list">Go to list page</Link>
-
-    /* 带参数 */
+    
+    /* With query string */
     <Link to="/list?a=b">Go to list page</Link>
 
-    /* 包含子组件 */
+    /* Include child component */
     <Link to="/list?a=b"><button>Go to list page</button></Link>
   </div>
 }
 ```
 
 ### umi/router
-通过编程的方式做路由切换，包含以下 4 个 API 。
+
+Programmatic navigation via four router methods
 
 #### router.push(path)
-推一个新的页面到 history 里。
 
-例子：
+Add one entry to the browser's history.
+
+Example:
 
 ```js
 import router from 'umi/router';
 
-// 普通跳转，不带参数
+// Normal navigation without query string
 router.push('/list');
 
-// 带参数
+// With query string
 router.push('/list?a=b');
 router.push({
   pathname: '/list',
@@ -50,19 +53,21 @@ router.push({
     a: 'b',
   },
 });
-# 对象且不包含 pathname 会报错
+# Object without property `pathname` will throw an error 
 router.push({
   query: {}
 });
 ```
 
 #### router.replace(path)
-替换当前页面，参数和 [router.push()](#router.push\(path\)) 相同。
+
+Replace current page. Accept same parameter as [router.push()](#router.push\(path\)) 
 
 #### router.go(n)
-往前或往后跳指定页数。
 
-例子：
+Move back or forward through history.
+
+Example:
 
 ```js
 import router from 'umi/router';
@@ -73,9 +78,9 @@ router.go(2);
 
 #### router.goBack()
 
-后退一页。
+Move backward.
 
-例子：
+Example:
 
 ```js
 import router from 'umi/router';
@@ -84,68 +89,85 @@ router.goBack();
 
 ### umi/navlink
 
-详见：https://reacttraining.com/react-router/web/api/NavLink
+See: [https://reacttraining.com/react-router/web/api/NavLink](https://reacttraining.com/react-router/web/api/NavLink)
 
 ### umi/redirect
 
-重定向用。
+Redirection.
 
-例子：
+Example:
 
 ```js
 import Redirect from 'umi/redirect';
 <Redirect to="/login" />
 ```
 
-详见：https://reacttraining.com/react-router/web/api/Redirect
+See: [https://reacttraining.com/react-router/web/api/Redirect](https://reacttraining.com/react-router/web/api/Redirect)
+
+### umi/prompt
+
+Example.
+
+```js
+import Prompt from 'umi/prompt';
+
+export default () => {
+  return (
+    <>
+      <h1>Prompt</h1>
+      <Prompt
+        when={true}
+        message={(location) => {
+          return window.confirm(`confirm to leave to ${location.pathname}?`);
+        }}
+      />
+    </>
+  );
+}
+```
+
+See：[https://reacttraining.com/react-router/web/api/Prompt](https://reacttraining.com/react-router/web/api/Prompt)
 
 ### umi/withRouter
 
-详见：https://reacttraining.com/react-router/web/api/withRouter
+See: [https://reacttraining.com/react-router/web/api/withRouter](https://reacttraining.com/react-router/web/api/withRouter)
 
-## 性能
+## Performance
 
 ### umi/dynamic
 
-动态加载组件。
+Dynamically loading components based on [react-loadable](https://github.com/jamiebuilds/react-loadable).
 
-#### dynamic(resolve)
-例子：
+#### dynamic(options)
+
+Example:
 
 ```js
 import dynamic from 'umi/dynamic';
 
-// 延时 1s 渲染的组件。
-const App = dynamic(() => {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve(() => <div>I will render after 1s</div>);
-    }, /* 1s */1000);
-  }));
+// Render component with 1s delay
+const App = dynamic({
+  loader: () => {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        resolve(() => <div>I will render after 1s</div>);
+      }, /* 1s */1000);
+    }));
+  },
 });
 
-// 或者用 async 语法
+// Or use `async function`
 const delay = (timeout) => new Promise(resolve => setTimeout(resolve, timeout));
-const App = dynamic(async function() {
-  await delay(/* 1s */1000);
-  return () => <div>I will render after 1s</div>;
+const App = dynamic({
+  loader: async function() {
+    await delay(/* 1s */1000);
+    return () => <div>I will render after 1s</div>;
+  },
 });
 ```
 
-#### dynamic(resolve, { loading })
-
-可以通过第二个参数可以指定 Loading Component 。
-
-```js
-dynamic(async function() {}, {
-  loading() {
-    return <div>Loading Component...</div>;
-  }
-})
-```
-
-## 构建
+## Build
 
 ### umi/babel
 
-让用户可基于 umi 的 babel 配置进行扩展。
+Make umi's babel configuration extensible.

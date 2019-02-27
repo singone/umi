@@ -1,6 +1,7 @@
 import Config from 'webpack-chain';
-import { join, dirname, resolve, relative } from 'path';
+import { join, resolve, relative } from 'path';
 import { existsSync } from 'fs';
+import { EOL } from 'os';
 import assert from 'assert';
 import { getPkgPath, shouldTransform } from './es5ImcompatibleVersions';
 import resolveDefine from './resolveDefine';
@@ -42,21 +43,26 @@ export default function(opts) {
 
   // resolve
   webpackConfig.resolve
-    .set('symlinks', false)
+    // 不能设为 false，因为 tnpm 是通过 link 处理依赖，设为 false tnpm 下会有大量的冗余模块
+    .set('symlinks', true)
     .modules.add('node_modules')
     .add(join(__dirname, '../../node_modules'))
+    // Fix yarn global resolve problem
+    // ref: https://github.com/umijs/umi/issues/872
+    .add(join(__dirname, '../../../'))
     .end()
     .extensions.merge([
       '.web.js',
+      '.wasm',
       '.mjs',
       '.js',
-      '.json',
       '.web.jsx',
       '.jsx',
       '.web.ts',
       '.ts',
       '.web.tsx',
       '.tsx',
+      '.json',
     ]);
 
   if (opts.alias) {
@@ -84,9 +90,10 @@ export default function(opts) {
   const DEFAULT_INLINE_LIMIT = 10000;
   const rule = webpackConfig.module
     .rule('exclude')
-    .exclude.add(/\.json$/)
-    .add(/\.(js|jsx|ts|tsx)$/)
-    .add(/\.(css|less|scss|sass)$/);
+    .exclude
+      .add(/\.json$/)
+      .add(/\.(js|jsx|ts|tsx|mjs|wasm)$/)
+      .add(/\.(css|less|scss|sass)$/);
   if (opts.urlLoaderExcludes) {
     opts.urlLoaderExcludes.forEach(exclude => {
       rule.add(exclude);
@@ -95,100 +102,155 @@ export default function(opts) {
   rule
     .end()
     .use('url-loader')
-    .loader(require.resolve('url-loader'))
+    .loader(require.resolve('umi-url-pnp-loader'))
     .options({
       limit: opts.inlineLimit || DEFAULT_INLINE_LIMIT,
       name: 'static/[name].[hash:8].[ext]',
     });
 
   const babelOptsCommon = {
+    // Tell babel to guess the type, instead assuming all files are modules
+    // https://github.com/webpack/webpack/issues/4039#issuecomment-419284940
+    sourceType: 'unambiguous',
     cacheDirectory: process.env.BABEL_CACHE !== 'none', // enable by default
     babelrc: !!process.env.BABELRC, // disable by default
+    customize: require.resolve('babel-preset-umi/lib/webpack-overrides'),
   };
   const babel = opts.babel || {};
   const babelOpts = {
     presets: [...(babel.presets || []), ...(opts.extraBabelPresets || [])],
-    plugins: [...(babel.plugins || []), ...(opts.extraBabelPlugins || [])],
-    ...babelOptsCommon,
-  };
-  const babelOptsForDeps = {
-    presets: [
-      [require.resolve('babel-preset-umi'), { transformRuntime: false }],
+    plugins: [
+      ...(babel.plugins || []),
+      ...(opts.extraBabelPlugins || []),
+      [
+        require.resolve('babel-plugin-named-asset-import'),
+        {
+          loaderMap: {
+            svg: {
+              ReactComponent: `${require.resolve(
+                '../svgr',
+              )}?-prettier,-svgo![path]`,
+            },
+          },
+        },
+      ],
     ],
     ...babelOptsCommon,
   };
+
   if (opts.disableDynamicImport) {
     babelOpts.plugins = [
       ...(babelOpts.plugins || []),
-      require.resolve('babel-plugin-dynamic-import-node-sync'),
-    ];
-    babelOptsForDeps.plugins = [
-      ...(babelOptsForDeps.plugins || []),
-      require.resolve('babel-plugin-dynamic-import-node-sync'),
+      require.resolve('babel-plugin-dynamic-import-node'),
     ];
   }
+
+  // module -> eslint
+  if (process.env.ESLINT && process.env.ESLINT !== 'none') {
+    require('./eslint').default(webpackConfig, opts);
+  }
+
+  // Avoid "require is not defined" errors
+  webpackConfig.module
+    .rule('mjs-require')
+      .test(/\.mjs$/)
+      .type('javascript/auto')
+      .include
+        .add(opts.cwd);
+
+  // module -> mjs
+  webpackConfig.module
+    .rule('mjs')
+      .test(/\.mjs$/)
+      .include
+        .add(opts.cwd)
+        .end()
+      .use('babel-loader')
+        .loader(require.resolve('babel-loader'))
+        .options(babelOpts);
 
   // module -> js
   webpackConfig.module
     .rule('js')
-    .test(/\.js$/)
-    .include.add(opts.cwd)
-    .end()
-    .exclude.add(/node_modules/)
-    .end()
-    .use('babel-loader')
-    .loader(require.resolve('babel-loader'))
-    .options(babelOpts);
+      .test(/\.js$/)
+      .include
+        .add(opts.cwd)
+        .end()
+      .exclude
+        .add(/node_modules/)
+        .end()
+      .use('babel-loader')
+        .loader(require.resolve('babel-loader'))
+        .options(babelOpts);
 
   // module -> jsx
   // jsx 不 exclude node_modules
   webpackConfig.module
     .rule('jsx')
-    .test(/\.jsx$/)
-    .include.add(opts.cwd)
-    .end()
-    .use('babel-loader')
-    .loader(require.resolve('babel-loader'))
-    .options(babelOpts);
+      .test(/\.jsx$/)
+      .include
+        .add(opts.cwd)
+        .end()
+      .use('babel-loader')
+        .loader(require.resolve('babel-loader'))
+        .options(babelOpts);
 
   // module -> extraBabelIncludes
   // suport es5ImcompatibleVersions
   const extraBabelIncludes = opts.extraBabelIncludes || [];
-  if (opts.es5ImcompatibleVersions) {
-    extraBabelIncludes.push(a => {
-      if (a.indexOf('node_modules') === -1) return false;
-      const pkgPath = getPkgPath(a);
-      return shouldTransform(pkgPath);
-    });
-  }
+  extraBabelIncludes.push(a => {
+    if (a.indexOf('node_modules') === -1) return false;
+    const pkgPath = getPkgPath(a);
+    return shouldTransform(pkgPath);
+  });
   extraBabelIncludes.forEach((include, index) => {
     const rule = `extraBabelInclude_${index}`;
     webpackConfig.module
       .rule(rule)
-      .test(/\.jsx?$/)
-      .include.add(include)
-      .end()
-      .use('babel-loader')
-      .loader(require.resolve('babel-loader'))
-      .options(babelOptsForDeps);
+        .test(/\.jsx?$/)
+        .include
+          .add(include)
+          .end()
+        .use('babel-loader')
+          .loader(require.resolve('babel-loader'))
+          .options(babelOpts);
   });
 
   // module -> tsx?
   const tsConfigFile = opts.tsConfigFile || join(opts.cwd, 'tsconfig.json');
   webpackConfig.module
     .rule('ts')
-    .test(/\.tsx?$/)
-    .include.add(opts.cwd)
-    .end()
-    .exclude.add(/node_modules/)
-    .end()
-    .use('awesome-typescript-loader')
-    .loader(require.resolve('awesome-typescript-loader'))
-    .options({
-      configFileName: tsConfigFile,
-      transpileOnly: true,
-      ...(opts.typescript || {}),
-    });
+      .test(/\.tsx?$/)
+      .use('babel-loader')
+        .loader(require.resolve('babel-loader'))
+        .options(babelOpts)
+        .end()
+      .use('ts-loader')
+        .loader(require.resolve('ts-loader'))
+        .options({
+          configFile: tsConfigFile,
+          transpileOnly: true,
+          // ref: https://github.com/TypeStrong/ts-loader/blob/fbed24b/src/utils.ts#L23
+          errorFormatter(error, colors) {
+            const messageColor =
+              error.severity === 'warning' ? colors.bold.yellow : colors.bold.red;
+            return (
+              colors.grey('[tsl] ') +
+              messageColor(error.severity.toUpperCase()) +
+              (error.file === ''
+                ? ''
+                : messageColor(' in ') +
+                  colors.bold.cyan(
+                    `${relative(cwd, join(error.context, error.file))}(${
+                      error.line
+                    },${error.character})`,
+                  )) +
+              EOL +
+              messageColor(`      TS${error.code}: ${error.content}`)
+            );
+          },
+          ...(opts.typescript || {}),
+        });
 
   // module -> css
   require('./css').default(webpackConfig, opts);
@@ -198,16 +260,23 @@ export default function(opts) {
     .plugin('define')
     .use(require('webpack/lib/DefinePlugin'), [resolveDefine(opts)]);
 
-  // plugins -> case sensitive
-  webpackConfig
-    .plugin('case-sensitive-paths')
-    .use(require('case-sensitive-paths-webpack-plugin'));
-
   // plugins -> progress bar
+  const NO_PROGRESS = process.env.PROGRESS === 'none';
   if (!process.env.__FROM_UMI_TEST) {
-    webpackConfig
-      .plugin('progress')
-      .use(require('webpackbar'), [{ minimal: false }]);
+    if (!process.env.CI && !NO_PROGRESS) {
+      if (process.platform === 'win32') {
+        webpackConfig.plugin('progress')
+          .use(require('progress-bar-webpack-plugin'));
+      } else {
+        webpackConfig.plugin('progress')
+          .use(require('webpackbar'), [
+            {
+              color: 'green',
+              reporters: ['fancy'],
+            },
+          ]);
+      }
+    }
   }
 
   // plugins -> ignore moment locale
@@ -226,6 +295,25 @@ export default function(opts) {
           analyzerMode: 'server',
           analyzerPort: process.env.ANALYZE_PORT || 8888,
           openAnalyzer: true,
+          // generate stats file while ANALYZE_DUMP exist
+          generateStatsFile: !!process.env.ANALYZE_DUMP,
+          statsFilename: process.env.ANALYZE_DUMP || 'stats.json',
+        },
+      ]);
+  }
+
+  if (process.env.DUPLICATE_CHECKER) {
+    webpackConfig
+      .plugin('duplicate-package-checker')
+      .use(require('duplicate-package-checker-webpack-plugin'));
+  }
+
+  if (process.env.FORK_TS_CHECKER) {
+    webpackConfig
+      .plugin('fork-ts-checker')
+      .use(require('fork-ts-checker-webpack-plugin'), [
+        {
+          formatter: 'codeframe',
         },
       ]);
   }
@@ -256,13 +344,19 @@ export default function(opts) {
     });
   }
 
-  // plugins -> friendly-errors
   if (!process.env.__FROM_UMI_TEST) {
+    // filter `Conflicting order between` warning
+    webpackConfig
+      .plugin('filter-css-conflicting-warnings')
+      .use(require('./FilterCSSConflictingWarning').default);
+
+    // plugins -> friendly-errors
+    const { CLEAR_CONSOLE = 'none' } = process.env;
     webpackConfig
       .plugin('friendly-errors')
       .use(require('friendly-errors-webpack-plugin'), [
         {
-          clearConsole: process.env.CLEAR_CONSOLE !== 'none',
+          clearConsole: CLEAR_CONSOLE !== 'none',
         },
       ]);
   }
@@ -296,6 +390,14 @@ export default function(opts) {
     );
     opts.chainConfig(webpackConfig);
   }
-
-  return webpackConfig.toConfig();
+  let config = webpackConfig.toConfig();
+  if (process.env.SPEED_MEASURE) {
+    const SpeedMeasurePlugin = require('speed-measure-webpack-plugin');
+    const smpOption = process.env.SPEED_MEASURE === 'CONSOLE'
+      ? { outputFormat: 'human', outputTarget: console.log }
+      : { outputFormat: 'json', outputTarget: join(process.cwd(), 'speed-measure.json') };
+    const smp = new SpeedMeasurePlugin(smpOption);
+    config = smp.wrap(config);
+  }
+  return config;
 }

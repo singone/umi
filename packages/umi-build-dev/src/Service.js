@@ -1,13 +1,18 @@
 import chalk from 'chalk';
-import { join } from 'path';
+import { join, dirname } from 'path';
+import { existsSync, readFileSync, writeFileSync } from 'fs';
 import assert from 'assert';
-import clonedeep from 'lodash.clonedeep';
-import assign from 'object-assign';
+import mkdirp from 'mkdirp';
+import { assign, cloneDeep } from 'lodash';
+import { parse } from 'dotenv';
+import signale from 'signale';
+import { deprecate } from 'umi-utils';
 import getPaths from './getPaths';
 import getPlugins from './getPlugins';
 import PluginAPI from './PluginAPI';
 import UserConfig from './UserConfig';
 import registerBabel from './registerBabel';
+import getCodeFrame from './utils/getCodeFrame';
 
 const debug = require('debug')('umi-build-dev:Service');
 
@@ -47,6 +52,12 @@ export default class Service {
 
   resolvePlugins() {
     try {
+      assert(
+        Array.isArray(this.config.plugins || []),
+        `Configure item ${chalk.underline.cyan(
+          'plugins',
+        )} should be Array, but got ${chalk.red(typeof this.config.plugins)}`,
+      );
       return getPlugins({
         cwd: this.cwd,
         plugins: this.config.plugins || [],
@@ -55,8 +66,7 @@ export default class Service {
       if (process.env.UMI_TEST) {
         throw new Error(e);
       } else {
-        console.error(chalk.red(e.message));
-        console.error(e);
+        signale.error(e);
         process.exit(1);
       }
     }
@@ -65,6 +75,16 @@ export default class Service {
   initPlugin(plugin) {
     const { id, apply, opts } = plugin;
     try {
+      assert(
+        typeof apply === 'function',
+        `
+plugin must export a function, e.g.
+
+  export default function(api) {
+    // Implement functions via api
+  }
+        `.trim(),
+      );
       const api = new Proxy(new PluginAPI(id, this), {
         get: (target, prop) => {
           if (this.pluginMethods[prop]) {
@@ -76,6 +96,7 @@ export default class Service {
               'changePluginOption',
               'applyPlugins',
               '_applyPluginsAsync',
+              'writeTmpFile',
               // properties
               'cwd',
               'config',
@@ -115,10 +136,14 @@ export default class Service {
       if (process.env.UMI_TEST) {
         throw new Error(e);
       } else {
-        console.error(
-          chalk.red(`Plugin ${id} initialize failed, ${e.message}`),
+        signale.error(
+          `
+Plugin ${chalk.cyan.underline(id)} initialize failed
+
+${getCodeFrame(e, { cwd: this.cwd })}
+        `.trim(),
         );
-        console.error(e);
+        debug(e);
         process.exit(1);
       }
     }
@@ -131,7 +156,7 @@ export default class Service {
 
     let count = 0;
     while (this.extraPlugins.length) {
-      const extraPlugins = clonedeep(this.extraPlugins);
+      const extraPlugins = cloneDeep(this.extraPlugins);
       this.extraPlugins = [];
       extraPlugins.forEach(plugin => {
         this.initPlugin(plugin);
@@ -171,6 +196,7 @@ export default class Service {
   }
 
   applyPlugins(key, opts = {}) {
+    debug(`apply plugins ${key}`);
     return (this.pluginHooks[key] || []).reduce((memo, { fn }) => {
       try {
         return fn({
@@ -185,6 +211,7 @@ export default class Service {
   }
 
   async _applyPluginsAsync(key, opts = {}) {
+    debug(`apply plugins async ${key}`);
     const hooks = this.pluginHooks[key] || [];
     let memo = opts.initialValue;
     for (const hook of hooks) {
@@ -197,8 +224,36 @@ export default class Service {
     return memo;
   }
 
+  loadEnv() {
+    const basePath = join(this.cwd, '.env');
+    const localPath = `${basePath}.local`;
+
+    const load = path => {
+      if (existsSync(path)) {
+        debug(`load env from ${path}`);
+        const parsed = parse(readFileSync(path, 'utf-8'));
+        Object.keys(parsed).forEach(key => {
+          if (!process.env.hasOwnProperty(key)) {
+            process.env[key] = parsed[key];
+          }
+        });
+      }
+    };
+
+    load(basePath);
+    load(localPath);
+  }
+
+  writeTmpFile(file, content) {
+    const { paths } = this;
+    const path = join(paths.absTmpDirPath, file);
+    mkdirp.sync(dirname(path));
+    writeFileSync(path, content, 'utf-8');
+  }
+
   init() {
     // load env
+    this.loadEnv();
 
     // init plugins
     this.initPlugins();
@@ -208,6 +263,11 @@ export default class Service {
     const config = userConfig.getConfig({ force: true });
     mergeConfig(this.config, config);
     this.userConfig = userConfig;
+    if (config.browserslist) {
+      deprecate('config.browserslist', 'use config.targets instead');
+    }
+    debug('got user config');
+    debug(this.config);
 
     // assign user's outputPath config to paths object
     if (config.outputPath) {
@@ -215,15 +275,41 @@ export default class Service {
       paths.outputPath = config.outputPath;
       paths.absOutputPath = join(paths.cwd, config.outputPath);
     }
+    debug('got paths');
+    debug(this.paths);
   }
 
-  run(name, args = {}) {
+  registerCommand(name, opts, fn) {
+    if (typeof opts === 'function') {
+      fn = opts;
+      opts = null;
+    }
+    opts = opts || {};
+    assert(
+      !(name in this.commands),
+      `Command ${name} exists, please select another one.`,
+    );
+    this.commands[name] = { fn, opts };
+  }
+
+  run(name = 'help', args) {
     this.init();
-    debug(`run ${name} with args ${args}`);
+    return this.runCommand(name, args);
+  }
+
+  runCommand(rawName, rawArgs) {
+    debug(`raw command name: ${rawName}, args: ${JSON.stringify(rawArgs)}`);
+    const { name, args } = this.applyPlugins('_modifyCommand', {
+      initialValue: {
+        name: rawName,
+        args: rawArgs,
+      },
+    });
+    debug(`run ${name} with args ${JSON.stringify(args)}`);
 
     const command = this.commands[name];
-    if (!command && name) {
-      console.error(chalk.red(`command "${name}" does not exists.`));
+    if (!command) {
+      signale.error(`Command ${chalk.underline.cyan(name)} does not exists`);
       process.exit(1);
     }
 

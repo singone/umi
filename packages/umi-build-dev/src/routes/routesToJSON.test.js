@@ -5,7 +5,7 @@ const service = {
   paths: {
     cwd: '$CWD$',
     absSrcPath: '$SRC$',
-    absTmpDirPath: '$CWD$/.pages/.umi',
+    absTmpDirPath: '$CWD$/pages/.umi',
     tmpDirPath: './pages/.umi',
     absCompilingComponentPath: '$COMPILING$',
   },
@@ -111,16 +111,24 @@ describe('routesToJSON', () => {
       initialValue: "require('../A').default",
       args: {
         importPath: '../A',
-        webpackChunkName: 'pages__A',
+        webpackChunkName: 'p__A',
         component: './pages/A',
       },
     });
   });
 
   it('Routes', () => {
-    const json = routesToJSON([{ Routes: ['./routes/A'] }], service, {});
+    const json = routesToJSON(
+      [
+        {
+          Routes: ['./routes/A', './pages/.umi/B'],
+        },
+      ],
+      service,
+      {},
+    );
     expect(JSON.parse(json)).toEqual([
-      { Routes: "[require('../../routes/A').default]" },
+      { Routes: "[require('../../routes/A').default, require('./B').default]" },
     ]);
   });
 

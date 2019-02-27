@@ -18,10 +18,14 @@ export default function(service) {
     service.applyPlugins('chainWebpackConfig', {
       args: webpackConfig,
     });
-    if (config.chainWebpackConfig) {
-      config.chainWebpackConfig(webpackConfig);
+    if (config.chainWebpack) {
+      config.chainWebpack(webpackConfig, {
+        webpack: require('af-webpack/webpack'),
+      });
     }
   };
 
-  return getConfig(afWebpackOpts);
+  return service.applyPlugins('modifyWebpackConfig', {
+    initialValue: getConfig(afWebpackOpts),
+  });
 }

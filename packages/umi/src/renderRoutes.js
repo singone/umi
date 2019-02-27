@@ -1,7 +1,45 @@
 import React from 'react';
 import { Switch, Route, Redirect } from 'react-router-dom';
 
-function withRoutes(Routes) {
+const RouteInstanceMap = {
+  get(key) {
+    return key._routeInternalComponent;
+  },
+  has(key) {
+    return key._routeInternalComponent !== undefined;
+  },
+  set(key, value) {
+    key._routeInternalComponent = value;
+  },
+};
+
+// Support pass props from layout to child routes
+const RouteWithProps = ({ path, exact, strict, render, location, ...rest }) => (
+  <Route
+    path={path}
+    exact={exact}
+    strict={strict}
+    location={location}
+    render={props => render({ ...props, ...rest })}
+  />
+);
+
+function getCompatProps(props) {
+  const compatProps = {};
+  if (__UMI_BIGFISH_COMPAT) {
+    if (props.match && props.match.params && !props.params) {
+      compatProps.params = props.match.params;
+    }
+  }
+  return compatProps;
+}
+
+function withRoutes(route) {
+  if (RouteInstanceMap.has(route)) {
+    return RouteInstanceMap.get(route);
+  }
+
+  const { Routes } = route;
   let len = Routes.length - 1;
   let Component = args => {
     const { render, ...props } = args;
@@ -18,17 +56,19 @@ function withRoutes(Routes) {
     len -= 1;
   }
 
-  return args => {
+  const ret = args => {
     const { render, ...rest } = args;
     return (
-      <Route
+      <RouteWithProps
         {...rest}
         render={props => {
-          return <Component {...props} render={render} />;
+          return <Component {...props} route={route} render={render} />;
         }}
       />
     );
   };
+  RouteInstanceMap.set(route, ret);
+  return ret;
 }
 
 export default function renderRoutes(
@@ -50,7 +90,7 @@ export default function renderRoutes(
             />
           );
         }
-        const RouteRoute = route.Routes ? withRoutes(route.Routes) : Route;
+        const RouteRoute = route.Routes ? withRoutes(route) : RouteWithProps;
         return (
           <RouteRoute
             key={route.key || i}
@@ -60,31 +100,26 @@ export default function renderRoutes(
             render={props => {
               const childRoutes = renderRoutes(
                 route.routes,
-                {} /* extraProps */,
+                {},
                 {
-                  /* switchProps */
                   location: props.location,
                 },
               );
               if (route.component) {
-                const compatProps = {};
-                if (__UMI_BIGFISH_COMPAT) {
-                  if (
-                    props.match &&
-                    props.match.params &&
-                    !props.params &&
-                    !extraProps.params
-                  ) {
-                    compatProps.params = props.match.params;
-                  }
-                }
+                const compatProps = getCompatProps({
+                  ...props,
+                  ...extraProps,
+                });
+                const newProps = window.g_plugins.apply('modifyRouteProps', {
+                  initialValue: {
+                    ...props,
+                    ...extraProps,
+                    ...compatProps,
+                  },
+                  args: { route },
+                });
                 return (
-                  <route.component
-                    {...props}
-                    {...extraProps}
-                    {...compatProps}
-                    route={route}
-                  >
+                  <route.component {...newProps} route={route}>
                     {childRoutes}
                   </route.component>
                 );

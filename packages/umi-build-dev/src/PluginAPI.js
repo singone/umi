@@ -1,9 +1,11 @@
 import debug from 'debug';
 import assert from 'assert';
 import { relative } from 'path';
-import isPlainObject from 'is-plain-object';
+import lodash, { isPlainObject } from 'lodash';
+import Mustache from 'mustache';
 import { winPath, compatDirname, findJS, findCSS } from 'umi-utils';
-import Generator from 'yeoman-generator';
+import signale from 'signale';
+import BasicGenerator from './BasicGenerator';
 import registerBabel, { addBabelRegisterFiles } from './registerBabel';
 
 export default class PluginAPI {
@@ -13,11 +15,14 @@ export default class PluginAPI {
 
     // utils
     this.debug = debug(`umi-plugin: ${id}`);
+    this.log = signale;
     this.winPath = winPath;
+    this._ = lodash;
     this.compatDirname = compatDirname;
     this.findJS = findJS;
     this.findCSS = findCSS;
-    this.Generator = Generator;
+    this.Mustache = Mustache;
+    this.Generator = BasicGenerator;
 
     this.API_TYPE = {
       ADD: Symbol('add'),
@@ -28,22 +33,15 @@ export default class PluginAPI {
     this._addMethods();
   }
 
-  relativeToTmp(path) {
+  relativeToTmp = path => {
     return this.winPath(relative(this.service.paths.absTmpDirPath, path));
-  }
+  };
 
   _resolveDeps(file) {
     return require.resolve(file);
   }
 
   _addMethods() {
-    this.registerMethod('chainWebpackConfig', {
-      type: this.API_TYPE.EVENT,
-    });
-    this.registerMethod('_registerConfig', {
-      type: this.API_TYPE.ADD,
-    });
-
     [
       [
         'chainWebpackConfig',
@@ -66,15 +64,19 @@ export default class PluginAPI {
       'addEntryCodeAhead',
       'addEntryImport',
       'addEntryImportAhead',
+      'addEntryPolyfillImports',
       'addRendererWrapperWithComponent',
       'addRendererWrapperWithModule',
       'addRouterImport',
       'addRouterImportAhead',
+      'addVersionInfo',
+      'addUIPlugin',
       'modifyAFWebpackOpts',
       'modifyEntryRender',
       'modifyEntryHistory',
       'modifyRouteComponent',
       'modifyRouterRootComponent',
+      'modifyWebpackConfig',
       '_beforeServerWithApp',
       'beforeDevServer',
       '_beforeDevServerAsync',
@@ -91,11 +93,22 @@ export default class PluginAPI {
       'addHTMLScript',
       'addHTMLStyle',
       'addHTMLHeadScript',
+      'modifyHTMLChunks',
       'onGenerateFiles',
       'onHTMLRebuild',
       'modifyDefaultConfig',
       '_modifyConfig',
       'modifyHTMLWithAST',
+      '_modifyHelpInfo',
+      'addRuntimePlugin',
+      'addRuntimePluginKey',
+      'beforeBlockWriting',
+      '_modifyBlockPackageJSONPath',
+      '_modifyBlockDependencies',
+      '_modifyBlockFile',
+      '_modifyBlockTarget',
+      '_modifyCommand',
+      '_modifyBlockNewRouteConfig',
     ].forEach(method => {
       if (Array.isArray(method)) {
         this.registerMethod(...method);
@@ -138,16 +151,7 @@ export default class PluginAPI {
   }
 
   registerCommand(name, opts, fn) {
-    const { commands } = this.service;
-    if (typeof opts === 'function') {
-      fn = opts;
-      opts = null;
-    }
-    assert(
-      !(name in commands),
-      `Command ${name} exists, please select another one.`,
-    );
-    commands[name] = { fn, opts: opts || {} };
+    this.service.registerCommand(name, opts, fn);
   }
 
   registerGenerator(name, opts) {
@@ -157,10 +161,6 @@ export default class PluginAPI {
       `name should be supplied with a string, but got ${name}`,
     );
     assert(opts && opts.Generator, `opts.Generator should be supplied`);
-    // assert(
-    //   opts.Generator instanceof this.Generator,
-    //   `opts.Generator should be instance of api.Generator`,
-    // );
     assert(
       !(name in generators),
       `Generator ${name} exists, please select another one.`,
@@ -226,7 +226,9 @@ export default class PluginAPI {
       Array.isArray(files),
       `files for registerBabel must be Array, but got ${files}`,
     );
-    addBabelRegisterFiles(files);
+    addBabelRegisterFiles(files, {
+      cwd: this.service.cwd,
+    });
     registerBabel({
       cwd: this.service.cwd,
     });

@@ -1,5 +1,6 @@
 import { join } from 'path';
 import dvaPlugin, { getGlobalModels, getModel } from './index';
+import { winPath } from 'umi-utils';
 
 const fixtures = join(__dirname, 'fixtures');
 const base = join(fixtures, 'getModel');
@@ -11,10 +12,11 @@ const api = {
   config: {
     singular: false,
   },
+  winPath,
 };
 
 function normalizeModels(models, base) {
-  return models.map(model => model.replace(base, '$CWD$'));
+  return models.map(model => model.replace(winPath(base), '$CWD$'));
 }
 
 describe('umi-plugin-dva', () => {
@@ -84,6 +86,7 @@ describe('umi-plugin-dva', () => {
           absSrcPath,
         },
         config: {},
+        winPath,
       },
       /* shouldImportDynamic */ true,
     );
@@ -105,6 +108,7 @@ describe('umi-plugin-dva', () => {
         { path: '/', component: './pages/index.js' },
         { path: '/c', component: './pages/c/index.js' },
       ],
+      winPath,
     };
     let models = null;
 
@@ -115,7 +119,10 @@ describe('umi-plugin-dva', () => {
       },
       /* shouldImportDynamic */ false,
     );
-    expect(normalizeModels(models, cwd)).toEqual(['$CWD$/models/global.js']);
+    expect(normalizeModels(models, cwd)).toEqual([
+      '$CWD$/models/global.js',
+      '$CWD$/pages/models/a.js',
+    ]);
 
     // don't crash if have no component property
     models = getGlobalModels(
@@ -137,6 +144,7 @@ describe('umi-plugin-dva', () => {
     expect(normalizeModels(models, cwd)).toEqual([
       '$CWD$/models/global.js',
       '$CWD$/pages/b/models/b.js',
+      '$CWD$/pages/models/a.js',
     ]);
 
     models = getGlobalModels(
@@ -149,6 +157,7 @@ describe('umi-plugin-dva', () => {
     expect(normalizeModels(models, cwd)).toEqual([
       '$CWD$/models/global.js',
       '$CWD$/pages/c/models/c.js',
+      '$CWD$/pages/models/a.js',
     ]);
 
     models = getGlobalModels(
@@ -162,6 +171,7 @@ describe('umi-plugin-dva', () => {
       '$CWD$/models/global.js',
       '$CWD$/pages/c/d/models/d.js',
       '$CWD$/pages/c/models/c.js',
+      '$CWD$/pages/models/a.js',
     ]);
   });
 });

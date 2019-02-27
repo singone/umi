@@ -1,7 +1,6 @@
-import { join, relative } from 'path';
-import isAbsolute from 'path-is-absolute';
+import { join, relative, isAbsolute } from 'path';
 import { winPath } from 'umi-utils';
-import cloneDeep from 'lodash.clonedeep';
+import { cloneDeep } from 'lodash';
 
 let targetLevel = null;
 let level = 0;
@@ -11,8 +10,10 @@ export default (routes, service) => {
     targetLevel = process.env.CODE_SPLITTING_LEVEL;
   } else {
     targetLevel = 1;
-    const rootRoute = routes.filter(route => route.path === '/')[0];
-    if (rootRoute && rootRoute.routes) {
+    const routesHaveChild = routes.filter(
+      route => route.routes && route.routes.length,
+    );
+    if (routesHaveChild.length) {
       targetLevel = 2;
     }
   }
@@ -53,7 +54,9 @@ export default (routes, service) => {
             .map(
               v =>
                 `require('${winPath(
-                  relative(paths.absTmpDirPath, join(paths.cwd, v)),
+                  precedingDot(
+                    relative(paths.absTmpDirPath, join(paths.cwd, v)),
+                  ),
                 )}').default`,
             )
             .join(', ')}]`;
@@ -73,6 +76,10 @@ function patchRoutes(routes, webpackChunkName) {
   level -= 1;
 }
 
+function precedingDot(p) {
+  return p.startsWith('.') ? p : `./${p}`;
+}
+
 function normalizeEntry(entry) {
   return entry
     .replace(/^.(\/|\\)/, '')
@@ -84,7 +91,10 @@ function normalizeEntry(entry) {
 function patchRoute(route, webpackChunkName) {
   if (route.component && !route.component.startsWith('() =>')) {
     if (!webpackChunkName || level <= targetLevel) {
-      webpackChunkName = normalizeEntry(route.component || 'common_component');
+      webpackChunkName = normalizeEntry(route.component || 'common_component')
+        .replace(/^src__/, '')
+        .replace(/^pages__/, 'p__')
+        .replace(/^page__/, 'p__');
     }
     route.component = [
       route.component || 'common_component',

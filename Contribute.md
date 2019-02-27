@@ -1,30 +1,26 @@
 # Contribute
 
+> Notice: `y` is the alias for `yarn`, `n` is the alias for `npm`.
+
 ## Set up
 
-Install lerna@2.x globally after git clone the repo.
+Install dev deps after git clone the repo.
 
 ```bash
-$ npm i lerna@2.x -g
+$ y
 ```
 
-Install dev deps.
+Bootstrap every package with yarn. (Need to execute when new package is included)
 
 ```bash
-$ npm i
-```
-
-Bootstrap every package. (Need to execute when new package is included)
-
-```bash
-$ lerna bootstrap
+$ y bootstrap
 ```
 
 Link umi globally.
 
 ```bash
 $ cd packages/umi
-$ npm link
+$ y link
 ```
 
 ## Common Tasks
@@ -32,23 +28,27 @@ $ npm link
 Monitor file changes and transform with babel.
 
 ```bash
-$ npm run build -- --watch
+$ y build --watch
 ```
 
-Run test for a specified package.
+Run test.
 
 ```bash
-$ lerna exec --scope af-webpack -- npm run debug
+# Including e2e test
+$ y test
+
+# Unit test only
+$ y debug .test.(t|j)s
+
+# Test specified file and watch
+$ y debug getMockData.test.js -w
 ```
 
-Run `umi dev` in examples/simple.
+Run `umi dev` in examples/func-test.
 
 ```bash
-$ cd boilerplates/simple
+$ cd examples/func-test
 $ umi dev
-
-# Specifiy the port
-$ PORT=8001 umi dev
 ```
 
 Then open http://localhost:8000/ in your browser.
@@ -56,21 +56,28 @@ Then open http://localhost:8000/ in your browser.
 Run `umi build` in examples/simple.
 
 ```bash
-$ cd boilerplates/simple
+$ cd examples/func-test
 $ umi build
 
-# Don't compress
-$ NO_COMPRESS=true umi build
-
-# Debug transform result of specified loader
-DEBUG_LOADER=src/page/index.js umi build
+# Build without compress
+$ COMPRESS=none umi build
 ```
 
 Publish to npm.
 
 ```bash
-$ npm run publish
+# Can't use yarn for this command.
+$ n run publish
+```
 
-# Ignore specified package
-$ npm run publish -- --ignore af-webpack
+Debug doc in local.
+
+```bash
+$ y doc:dev
+```
+
+Deploy doc to [umijs.org](https://umijs.org/).
+
+```bash
+$ y doc:deploy
 ```

@@ -1,24 +1,26 @@
-# 按需加载
+# Load on demand
 
-出于性能的考虑，我们会对模块和组件进行按需加载，比如 umi 本身在实现的时候，每个页面就是按需加载的。
+For performance reasons, we load modules and components on demand.
 
-## 按需加载组件
+## Loading Components on Demand
 
-通过 `umi/dynamic` 接口实现，比如：
+Implemented through the `umi/dynamic` interface, such as:
 
 ```js
 import dynamic from 'umi/dynamic';
 
 const delay = (timeout) => new Promise(resolve => setTimeout(resolve, timeout));
-const App = dynamic(async function() {
-  await delay(/* 1s */1000);
-  return () => <div>I will render after 1s</div>;
+const App = dynamic({
+  loader: async function() {
+    await delay(/* 1s */1000);
+    return () => <div>I will render after 1s</div>;
+  },
 });
 ```
 
-## 按需加载模块
+## Loading Modules on Demand
 
-通过 `import()` 实现，比如：
+Implemented by `import()`, such as:
 
 ```js
 import('g2').then(() => {
